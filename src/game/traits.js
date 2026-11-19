@@ -79,7 +79,7 @@ export const TRAIT = Object.fromEntries(TRAITS.map((t) => [t.id, t]));
 // ── 능력 (연구로 해금 → 캐릭터에 장착, 캐릭터당 최대 2개) ──
 export const ABILITIES = [
   { id: 'remote', name: '원격 감지', desc: '멀리서 위험을 먼저 감지한다. 순찰 중 부상을 입지 않는다.', fx: { succ: 0.06, wis: 1, patrolSafe: true } },
-  { id: 'dragon', name: '드래곤', desc: '용의 힘을 빌려 등에 날개가 돋는다. 막강하지만 먹이 값이 든다.', fx: { str: 3, def: 2, dmg: -0.25, upkeep: 400 } },
+  { id: 'dragon', name: '드래곤', desc: '용의 힘을 빌린다. 피부가 푸르게 변하고 등에 노란 막의 날개가 돋는다. 막강하지만 먹이 값이 든다.', fx: { str: 3, def: 2, dmg: -0.25, upkeep: 400 } },
   { id: 'copycat', name: '카피캣', desc: '같은 부서 동료의 최고 스탯을 70% 수준으로 따라한다.', fx: { copycat: true } },
   { id: 'might', name: '괴력', desc: '상식을 벗어난 힘.', fx: { str: 4, succ: 0.03 } },
   { id: 'stealth', name: '은신', desc: '기척을 지운다. 밤에 특히 강하고 덜 다친다.', fx: { skl: 3, night: 0.05, dmg: -0.1 } },

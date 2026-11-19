@@ -182,6 +182,25 @@ await t('저장/복원: 커스터마이징·특성·연구가 유지되고 잘�
   const y = new Sim(snap, Math.random).byId.c04; assert.equal(y.look.hairStyle, 'f6'.length ? y.look.hairStyle : ''); assert.ok(y.pool >= 40 && y.pool <= 50); assert.ok(sumAlloc(y.alloc) <= y.pool); assert.deepEqual(y.traits, ['c01']); assert.deepEqual(y.eq, ['c01']); assert.deepEqual(y.ab, []);
   const old = new Sim({ v: 1, day: 3, clock: 10, funds: 5, units: { c04: { hp: 50, mor: 50, home: 'rager', mode: 'idle' } } }, Math.random); assert.equal(old.day, 3); assert.equal(old.byId.c04.hp, 50, '옛 저장 파일도 로드');
 });
+await t('백그라운드 따라잡기: advance 는 update 반복과 같고, 정지/하루 종료에서 멈추며, 조용히(quiet) 진행', () => {
+  const a = new Sim(null, () => 0.5), b = new Sim(null, () => 0.5); a.setSpeed(2); b.setSpeed(2);
+  a.advance(60); for (let i = 0; i < 600; i++) b.update(0.1); assert.ok(Math.abs(a.clock - b.clock) < 1e-6, `${a.clock} vs ${b.clock}`);
+  const p = new Sim(null, () => 0.5); p.advance(100); assert.equal(p.clock, 0, '정지 상태는 진행하지 않음');
+  const e = new Sim(null, () => 0.5); e.setSpeed(3 === 3 ? 2 : 1); e.advance(100000); assert.ok(e.ended && e.clock === 1260, '하루 종료에서 멈춤');
+  const q = new Sim(null, () => 0.5); let toasts = 0; q.on('toast', () => toasts++); q.setSpeed(2); q.sendMission('c10', 'rq1'); toasts = 0; q.quiet = true; q.advance(400); q.quiet = false;
+  assert.equal(toasts, 0, 'quiet 동안 토스트 없음'); assert.ok(q.dayLog.missions.length >= 1, '임무는 조용히 진행·완료됨');
+});
+await t('이름 변경: 검증·중복 방지·초기화·저장 복원', () => {
+  const s = new Sim(null, Math.random); const u = s.byId.c04;
+  assert.ok(s.setName('c04', '  새  이름 ', 'Newname').ok); assert.equal(u.name, '새 이름'); assert.equal(u.latin, 'Newname');
+  for (const bad of ['', 'x'.repeat(13), '<b>']) assert.equal(s.setName('c04', bad, 'Okname').ok, false, bad);
+  assert.equal(s.setName('c04', '정상', 'A').ok, false, '라틴어 1자'); assert.equal(s.setName('c04', '정상', '한글').ok, false, '라틴어는 영문만');
+  assert.equal(s.setName('c04', s.byId.c05.name, 'Zzz').ok, false, '다른 캐릭터와 같은 이름'); assert.equal(s.setName('c04', '정상', s.byId.c05.latin.toLowerCase()).ok, false, '라틴어 중복');
+  assert.ok(s.setName('c04', u.name, u.latin).ok, '자기 자신과는 같아도 됨');
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, Math.random); assert.equal(x.byId.c04.name, '새 이름'); assert.equal(x.byId.c04.latin, 'Newname');
+  snap.units.c06.c.nm = snap.units.c05.c.nm; const y = new Sim(snap, Math.random); assert.notEqual(y.byId.c06.name, y.byId.c05.name, '저장 파일의 중복 이름은 무시');
+  assert.ok(s.resetName('c04').ok); assert.equal(u.name, '강태오'); assert.equal(u.latin, 'Impetus');
+});
 await t('혼잣말: 초승달 없는 새 대사 10개 추가', () => {
   assert.equal(MONO.generic.length, 14); assert.equal(MONO.generic.filter((x) => x.includes('초승달')).length, 1, '기존 1개만 유지');
   assert.equal(new Set(MONO.generic).size, 14);

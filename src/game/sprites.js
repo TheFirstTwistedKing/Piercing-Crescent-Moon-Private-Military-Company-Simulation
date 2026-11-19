@@ -3,23 +3,50 @@ import { DEPT } from './data.js';
 import { drawHair, adj } from './hair.js';
 import { drawWeapon } from './weapons.js';
 
-export const CW = 16, CH = 24;
+export const CW = 32, CH = 24, OX = 8; // 날개가 펼쳐질 좌우 여백 8px 씩 (몸은 셀 안 x=8..23)
 const DIRS = ['down', 'left', 'right', 'up'];
 export const DIR_INDEX = { down: 0, left: 1, right: 2, up: 3 };
 const cache = new Map();
 
-// 드래곤 날개: 왼쪽 날개 모양을 좌우로 대칭해 그린다(x0=뼈대, x3=몸쪽 그림자). 걷는 프레임에서는 한 칸 내려가며 날갯짓.
-const WING_ROWS = { 2: [0], 3: [0, 1], 4: [0, 1, 2], 5: [0, 1, 2], 6: [0, 1, 2, 3], 7: [0, 1, 2, 3], 8: [0, 1, 2, 3], 9: [0, 1, 2, 3], 10: [0, 1, 2, 3], 11: [0, 2, 3], 12: [0, 3], 13: [0] };
+// 드래곤 날개(왼쪽 기준 12×13 도안, 오른쪽은 대칭). B=뼈대(팔 + 손가락뼈 3줄) C=손톱 M=막.
+// 막은 노랑 — 몸쪽/아래쪽은 어두운 금색, 아랫단은 한 톤 진하게, 곳곳에 하이라이트. 아랫단은 손가락 사이가 오목한 물결 모양.
+const WING = [
+  '......C.....',
+  '......B.....',
+  '....BBB.....',
+  '..BBMMMB....',
+  'BBMMMMBB....',
+  '..MMMBMMB...',
+  '...MBMMMB...',
+  '...BMMMBMB..',
+  '..BMMMBMMB..',
+  '.BMMMBMMMMB.',
+  'B.MMMBMMMMMB',
+  '...MBMMMMMM.',
+  '....BMMM....',
+];
+const WING_HL = new Set(['4,3', '3,4', '3,5', '4,8', '3,9', '7,9', '3,10', '6,11']);
+function wingColor(col, row) {
+  const ch = WING[row][col];
+  if (ch === 'C') return '#fff4cc';
+  if (ch === 'B') return row < 4 ? '#c88a20' : '#7a4a0e';   // 뼈대는 막과 대비되는 짙은 갈색(윗부분은 조금 밝게)
+  if (WING_HL.has(col + ',' + row)) return '#ffe066';
+  const below = WING[row + 1]?.[col];
+  if (!below || below === '.') return '#c99a12';           // 아랫단(물결 가장자리)
+  return col >= 8 || row >= 11 ? '#b8860b' : '#e8b923';     // 몸쪽/아래는 어둡게
+}
+// 걷는 프레임에서는 날개가 한 칸 내려갔다 올라오며 날갯짓한다. (셀 좌표 col → 몸 기준 x = col - OX)
 function drawWings(r, view, frame) {
-  const fy = frame ? 1 : 0, mem = '#8a2230', dk = '#4f111c', bone = '#e0d3b4', hl = '#b8404c';
-  const side = (mirror) => {
-    for (const [y, xs] of Object.entries(WING_ROWS)) for (const x of xs) r(x === 0 ? bone : x === 3 ? dk : x === 1 && +y % 3 === 0 ? hl : mem, mirror ? 15 - x : x, +y + fy, 1, 1);
-    r(dk, mirror ? 11 : 4, 9 + fy, 1, 3); // 어깨 연결부
-  };
-  side(false); if (view !== 'side') side(true);
+  const fy = frame ? 1 : 0;
+  const put = (mirror) => WING.forEach((line, row) => { for (let col = 0; col < 12; col++) if (line[col] !== '.') r(wingColor(col, row), mirror ? (CW - 1 - col) - OX : col - OX, row + fy, 1, 1); });
+  put(false); if (view !== 'side') put(true);
 }
 
-function drawCell(c, dir, frame, L, accent, weapon, wings) {
+const DRAGON_SKIN = '#4a86c8'; // 드래곤 능력자의 푸른 피부
+
+function drawInner(c, dir, frame, L0, accent, weapon, wings) {
+  const L = wings ? { ...L0, skin: DRAGON_SKIN } : L0;
+
   const r = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const lift = frame === 1 ? 1 : frame === 2 ? -1 : 0; // +1: 왼다리 들기, -1: 오른다리 들기
   const ink = '#120d0b';
@@ -53,7 +80,7 @@ function drawCell(c, dir, frame, L, accent, weapon, wings) {
   } else {
     const right = dir === 'right';
     c.save();
-    if (!right) { c.translate(CW, 0); c.scale(-1, 1); }
+    if (!right) { c.translate(16, 0); c.scale(-1, 1); }
     if (wings) drawWings(r, 'side', frame);
     const f1 = lift === 1 ? 1 : lift === -1 ? -1 : 0;
     r(L.pants, 6 + f1, 16, 2, 5); r(L.pants, 8 - f1, 16, 2, 5);
@@ -72,6 +99,8 @@ function drawCell(c, dir, frame, L, accent, weapon, wings) {
     c.restore();
   }
 }
+
+function drawCell(c, dir, frame, L, accent, weapon, wings) { c.save(); c.translate(OX, 0); drawInner(c, dir, frame, L, accent, weapon, wings); c.restore(); }
 
 function hat(r, view, back, L, accent, coatL) {
   const side = view === 's';

@@ -115,12 +115,16 @@ addEventListener('hashchange', () => route());
 // 엔진 이벤트 → 토스트 (한 번만 등록)
 engine.onToast((e) => { if (e.kind !== 'quiet') toast(e.text, e.kind === 'info' ? 'info' : e.kind); });
 
-// 네이티브(apk): 앱을 벗어났다 3초 이상 지나 돌아오면 새로 시작 → 인트로 재생 + 2차 보안 재확인
-let hiddenAt = 0;
-document.addEventListener('visibilitychange', () => {
+// 앱을 벗어났다 돌아올 때(Android): 로그인 상태와 게임은 그대로 두고 인트로만 다시 재생한다. 10분 넘게 비웠으면 새로 시작(2차 보안 재확인).
+// 게임 시간은 백그라운드에서도 흐른다(engine.js 의 catchUp).
+let hiddenAt = 0, replaying = false;
+document.addEventListener('visibilitychange', async () => {
   const native = !!window.Capacitor?.isNativePlatform?.();
-  if (document.hidden) hiddenAt = Date.now();
-  else if (native && hiddenAt && Date.now() - hiddenAt > 3000) location.reload();
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (!native || !hiddenAt || S.booting || replaying) return;
+  const away = Date.now() - hiddenAt; hiddenAt = 0;
+  if (away > 10 * 60 * 1000) { location.reload(); return; }
+  if (away > 3000) { replaying = true; try { await playIntro(document.body); } finally { replaying = false; } }
 });
 
 (async function boot() {
