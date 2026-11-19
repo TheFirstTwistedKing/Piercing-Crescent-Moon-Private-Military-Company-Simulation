@@ -8,7 +8,7 @@ const DIRS = ['down', 'left', 'right', 'up'];
 export const DIR_INDEX = { down: 0, left: 1, right: 2, up: 3 };
 const cache = new Map();
 
-// 드래곤 날개(왼쪽 기준 12×13 도안, 오른쪽은 대칭). B=뼈대(팔 + 손가락뼈 3줄) C=손톱 M=막.
+// 드래곤 날개(왼쪽 기준 12×13 도안, 오른쪽은 대칭). B=뼈대(팔 + 손가락뼈 3줄, 푸른색) C=손톱 M=막.
 // 막은 노랑 — 몸쪽/아래쪽은 어두운 금색, 아랫단은 한 톤 진하게, 곳곳에 하이라이트. 아랫단은 손가락 사이가 오목한 물결 모양.
 const WING = [
   '......C.....',
@@ -28,8 +28,8 @@ const WING = [
 const WING_HL = new Set(['4,3', '3,4', '3,5', '4,8', '3,9', '7,9', '3,10', '6,11']);
 function wingColor(col, row) {
   const ch = WING[row][col];
-  if (ch === 'C') return '#fff4cc';
-  if (ch === 'B') return row < 4 ? '#c88a20' : '#7a4a0e';   // 뼈대는 막과 대비되는 짙은 갈색(윗부분은 조금 밝게)
+  if (ch === 'C') return '#d6ebff';
+  if (ch === 'B') return row < 4 ? '#5fa8ee' : '#2f6fc0';   // 뼈대는 푸른색(윗부분은 조금 밝게)
   if (WING_HL.has(col + ',' + row)) return '#ffe066';
   const below = WING[row + 1]?.[col];
   if (!below || below === '.') return '#c99a12';           // 아랫단(물결 가장자리)
@@ -42,10 +42,8 @@ function drawWings(r, view, frame) {
   put(false); if (view !== 'side') put(true);
 }
 
-const DRAGON_SKIN = '#4a86c8'; // 드래곤 능력자의 푸른 피부
-
 function drawInner(c, dir, frame, L0, accent, weapon, wings) {
-  const L = wings ? { ...L0, skin: DRAGON_SKIN } : L0;
+  const L = L0;
 
   const r = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   const lift = frame === 1 ? 1 : frame === 2 ? -1 : 0; // +1: 왼다리 들기, -1: 오른다리 들기
