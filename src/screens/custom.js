@@ -6,29 +6,29 @@ import { HAIR_STYLES, HAIR_COLORS } from '../game/hair.js';
 import { WEAPONS, WEAPON, weaponIcon } from '../game/weapons.js';
 import { TRAITS, TRAIT, ABILITIES, ABILITY, RARITY, GACHA_ODDS, MAX_TRAITS, MAX_ABILITIES, fxLines } from '../game/traits.js';
 import { CSTATS, STAT_MAX, sumAlloc } from '../game/rules.js';
-import { drawPreview } from '../game/sprites.js';
+import { drawPreview, OX } from '../game/sprites.js';
 import { h, icon } from '../core/ui.js';
 
-const TABS = [['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['trait', '특성'], ['ability', '능력']];
+const TABS = [['name', '이름'], ['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['trait', '특성'], ['ability', '능력']];
 const fxList = (fx) => h('ul', { class: 'fxl' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
-const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(document.createElement('canvas'), { width: w, height: hh }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; drawPreview(c, u, opts); cv.className = 'px'; cv.style.width = w * scale + 'px'; cv.style.height = hh * scale + 'px'; return cv; };
+const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(document.createElement('canvas'), { width: w, height: hh }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.translate(-OX, 0); drawPreview(c, u, opts); cv.className = 'px'; cv.style.width = w * scale + 'px'; cv.style.height = hh * scale + 'px'; return cv; };
 
 export function mountCustom(root, ctx, arg) {
   const sim = engine.sim;
-  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'look', gtab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
+  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'name', gtab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
   const U = () => sim.byId[id];
   const scheduleSave = () => { clearTimeout(saveT); saveT = setTimeout(() => engine.save(), 1500); };
 
   /* ── 좌측: 인원 선택 ── */
   const list = h('aside', { class: 'cu-list', 'aria-label': '인원 선택' });
-  const sel = h('select', { class: 'cu-select', 'aria-label': '인원 선택', onchange: (e) => pick(e.target.value) }, ...sim.units.map((u) => h('option', { value: u.id }, `${u.name} · ${u.latin}`)));
-  const paintList = () => { sel.value = id; list.replaceChildren(...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en), ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${u.id === id ? 'on' : ''}`, onclick: () => pick(u.id) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin)), h('small', {}, u.role)))))); };
+  const sel = h('select', { class: 'cu-select', 'aria-label': '인원 선택', onchange: (e) => pick(e.target.value) });
+  const paintList = () => { sel.replaceChildren(...sim.units.map((u) => h('option', { value: u.id }, `${u.name} · ${u.latin}`))); sel.value = id; list.replaceChildren(...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en), ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${u.id === id ? 'on' : ''}`, onclick: () => pick(u.id) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin)), h('small', {}, u.role)))))); };
   const pick = (nid) => { id = nid; gtab = U().gender; reveal = null; Audio.sfx('select'); paintAll(); };
 
   /* ── 중앙: 미리보기 ── */
-  const cv = Object.assign(document.createElement('canvas'), { width: 16, height: 24, className: 'px stage-cv', 'aria-label': '캐릭터 미리보기' });
+  const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 24, className: 'px stage-cv', 'aria-label': '캐릭터 미리보기' });
   const sc = cv.getContext('2d'); sc.imageSmoothingEnabled = false;
-  const drawStage = () => { sc.clearRect(0, 0, 16, 24); drawPreview(sc, U(), { dir, frame: walk ? [1, 0, 2, 0][frame % 4] : 0 }); };
+  const drawStage = () => { sc.clearRect(0, 0, 32, 24); drawPreview(sc, U(), { dir, frame: walk ? [1, 0, 2, 0][frame % 4] : 0 }); };
   const stageInfo = h('div', { class: 'stage-info' });
   const dirs = h('div', { class: 'dirs' }, ...[['down', '앞'], ['left', '왼쪽'], ['right', '오른쪽'], ['up', '뒤']].map(([d, l]) => h('button', { type: 'button', class: 'seg-b', 'data-d': d, onclick: () => { dir = d; Audio.sfx('click'); paintDirs(); drawStage(); } }, l)),
     h('button', { type: 'button', class: 'seg-b', 'data-w': '1', onclick: () => { walk = !walk; Audio.sfx('click'); paintDirs(); } }, '걷기'));
@@ -47,6 +47,18 @@ export function mountCustom(root, ctx, arg) {
   const paintTabs = () => tabs.querySelectorAll('button').forEach((b) => { const on = b.dataset.k === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
   const body = h('div', { class: 'cu-body' });
   const changed = () => { scheduleSave(); paintStage(); paintPanel(); };
+
+  const nameTab = () => {
+    const u = U(), err = h('p', { class: 'err', role: 'alert' });
+    const nm = h('input', { id: 'cn', value: u.name, maxlength: 12, autocomplete: 'off', spellcheck: 'false' });
+    const ln = h('input', { id: 'cl', value: u.latin, maxlength: 14, autocomplete: 'off', spellcheck: 'false', autocapitalize: 'words' });
+    const done = (r, msg) => { if (!r.ok) { err.textContent = r.reason; Audio.sfx('error'); return; } Audio.sfx('confirm'); ctx.toast(msg, 'good'); paintList(); changed(); };
+    const form = h('form', { class: 'form', novalidate: true, onsubmit: (e) => { e.preventDefault(); err.textContent = ''; const r = sim.setName(id, nm.value, ln.value); done(r, `이름을 ${U().name} (${U().latin}) 으로 바꿨습니다.`); } },
+      h('label', { class: 'f', for: 'cn' }, h('span', { class: 'f-label' }, '이름'), nm, h('span', { class: 'f-hint' }, '1~12자. 다른 캐릭터와 같은 이름은 쓸 수 없습니다.')),
+      h('label', { class: 'f', for: 'cl' }, h('span', { class: 'f-label' }, '라틴어 이름 (코드네임)'), ln, h('span', { class: 'f-hint' }, '영문 2~14자.')), err,
+      h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'submit' }, '이름 저장'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { err.textContent = ''; done(sim.resetName(id), '기본 이름으로 되돌렸습니다.'); } }, '기본 이름으로')));
+    return h('div', {}, form, h('p', { class: 'hint' }, `기본 이름: ${u.baseName} · ${u.baseLatin}`));
+  };
 
   const lookTab = () => {
     const u = U(), cur = u.look.hairStyle;
@@ -106,7 +118,7 @@ export function mountCustom(root, ctx, arg) {
             : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel/research'); } }, '연구 필요 (10pt)')); })));
   };
 
-  const paintPanel = () => { body.replaceChildren(({ look: lookTab, weapon: weaponTab, stats: statsTab, trait: traitTab, ability: abilityTab })[tab]()); };
+  const paintPanel = () => { body.replaceChildren(({ name: nameTab, look: lookTab, weapon: weaponTab, stats: statsTab, trait: traitTab, ability: abilityTab })[tab]()); };
   const paintAll = () => { paintList(); paintStage(); paintTabs(); paintDirs(); paintPanel(); };
 
   root.append(h('div', { class: 'cust screen' },

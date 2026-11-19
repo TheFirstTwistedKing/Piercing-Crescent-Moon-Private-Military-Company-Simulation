@@ -37,7 +37,7 @@ class Unit {
     Object.assign(this, base);
     // 커스터마이징: 포인트 풀(40~50 랜덤), 배분, 특성 뽑기, 장착
     this.pool = randomPool(rand); this.alloc = autoAlloc(this.pool, base.dept);
-    this.used = 0; this.traits = []; this.eq = []; this.ab = [];
+    this.used = 0; this.traits = []; this.eq = []; this.ab = []; this.baseName = base.name; this.baseLatin = base.latin;
     this.hp = 100; this.mor = 60;
     this.home = base.dept === 'operation' ? 'operation' : base.dept; // 부서 방 = 부서 key
     this.mode = 'idle';          // idle | goto | mission | patrol
@@ -70,7 +70,7 @@ export class Sim {
   note(text, kind = 'info', toast = true) {
     const e = { day: this.day, clock: Math.floor(this.clock), text, kind };
     this.log.push(e); if (this.log.length > 80) this.log.shift();
-    if (toast) this.emit('toast', e);
+    if (toast && !this.quiet) this.emit('toast', e);
     this.dirty = true;
   }
   freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0 }; }
@@ -96,6 +96,20 @@ export class Sim {
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, reason: '색 형식 오류' };
     u.look.hairStyle = style; u.look.hair = color.toLowerCase(); this.dirty = true; this.emit('custom'); return { ok: true };
   }
+  /** 이름(1~12자)과 라틴어 이름(영문 2~14자) 변경. 다른 캐릭터와 같은 이름은 불가. */
+  nameProblem(id, name, latin) {
+    if (name.length < 1 || name.length > 12 || /[<>\u0000-\u001f]/.test(name)) return '이름은 1~12자로 입력하세요. (< > 제외)';
+    if (!/^[A-Za-z][A-Za-z '\-]{1,13}$/.test(latin)) return "라틴어 이름은 영문 2~14자로 입력하세요. (공백 · - ' 가능)";
+    const key = (x) => x.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+    for (const o of this.units) { if (o.id === id) continue; if (key(o.name) === key(name)) return '다른 캐릭터와 같은 이름입니다.'; if (key(o.latin) === key(latin)) return '다른 캐릭터와 같은 라틴어 이름입니다.'; }
+    return '';
+  }
+  setName(id, name, latin) {
+    const u = this.byId[id]; name = String(name ?? '').replace(/\s+/g, ' ').trim(); latin = String(latin ?? u.latin).replace(/\s+/g, ' ').trim();
+    const bad = this.nameProblem(id, name, latin); if (bad) return { ok: false, reason: bad };
+    u.name = name; u.latin = latin; this.dirty = true; this.emit('custom'); return { ok: true };
+  }
+  resetName(id) { const u = this.byId[id]; return this.setName(id, u.baseName, u.baseLatin); }
   setWeapon(id, w) { const u = this.byId[id]; if (!WEAPON[w]) return { ok: false, reason: '없는 무기' }; u.weapon = w; this.refresh(); return { ok: true }; }
   /** 스탯 한 칸을 v 로(0~10, 총합은 포인트 풀 이내). 실제 반영된 값을 돌려준다. */
   setStat(id, k, v) {
@@ -229,6 +243,12 @@ export class Sim {
 
   /* ── 진행 ── */
   setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended) s = 0; this.speed = s; }
+
+  /** 실제 시간 sec 초만큼 한꺼번에 진행(백그라운드에서 돌아왔을 때 따라잡기). 하루가 끝나거나 정지 상태면 멈춘다. */
+  advance(sec) {
+    let left = sec;
+    while (left > 1e-9 && !this.ended && this.speed > 0) { const d = Math.min(0.1, left); this.update(d); left -= d; }
+  }
 
   update(dtReal) {
     if (this.speed === 0 || this.ended) return;
@@ -367,7 +387,7 @@ export class Sim {
   /* ── 저장/복원 ── */
   serialize() {
     const units = {};
-    for (const u of this.units) units[u.id] = { c: { hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null };
+    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null };
     return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, units };
   }
   restore(s) {
@@ -380,7 +400,8 @@ export class Sim {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
       if (st.c) {
-        const c = st.c; if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if (WEAPON[c.w]) u.weapon = c.w;
+        const c = st.c; if (typeof c.nm === 'string' && typeof c.ln === 'string' && !this.nameProblem(u.id, c.nm.trim(), c.ln.trim())) { u.name = c.nm.trim(); u.latin = c.ln.trim(); }
+        if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if (WEAPON[c.w]) u.weapon = c.w;
         if (Number.isInteger(c.pool) && c.pool >= 40 && c.pool <= 50) u.pool = c.pool;
         u.traits = (c.traits || []).filter((t, i, a) => TRAIT[t] && a.indexOf(t) === i); u.used = Math.max(c.used || 0, u.traits.length);
         u.eq = (c.eq || []).filter((t) => u.traits.includes(t)).slice(0, MAX_TRAITS); u.ab = (c.ab || []).filter((a) => this.research.abilities.includes(a)).slice(0, MAX_ABILITIES);

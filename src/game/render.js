@@ -1,6 +1,6 @@
 // 월드 렌더러: 896×576 픽셀 월드를 한 번 그리고, 각 화면(현장/CCTV)이 잘라서 확대해 보여준다.
 import { WORLD_W, WORLD_H, renderStatic, LAMPS, CAMERAS, CAM_W, CAM_H } from './map.js';
-import { getSheet, drawShadow, CW, CH, DIR_INDEX } from './sprites.js';
+import { getSheet, drawShadow, CW, CH, OX, DIR_INDEX } from './sprites.js';
 import { DEPT } from './data.js';
 import { clockInfo } from './sim.js';
 
@@ -50,7 +50,7 @@ export class World {
     for (const u of list) {
       drawShadow(c, u.x, u.y);
       const f = u.moving ? WALK_FRAMES[Math.floor(u.anim) % 4] : 0;
-      c.drawImage(getSheet(u), f * CW, DIR_INDEX[u.dir] * CH, CW, CH, Math.round(u.x - 8), Math.round(u.y - 22), CW, CH);
+      c.drawImage(getSheet(u), f * CW, DIR_INDEX[u.dir] * CH, CW, CH, Math.round(u.x - 8 - OX), Math.round(u.y - 22), CW, CH);
     }
     const a = this.nightAlpha(sim.clock);
     if (a > 0.01) {

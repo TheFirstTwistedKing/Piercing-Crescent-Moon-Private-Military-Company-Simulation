@@ -12,7 +12,7 @@ function createWindow() {
     width: 1366, height: 860, minWidth: 900, minHeight: 600,
     backgroundColor: '#000000', title: '천공월아 관리 패널', autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'no-user-gesture-required', spellcheck: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'no-user-gesture-required', spellcheck: false, backgroundThrottling: false }, // 최소화/가려져도 게임 시간이 계속 흐르게
   });
   Menu.setApplicationMenu(null);
   win.once('ready-to-show', () => win.show());
