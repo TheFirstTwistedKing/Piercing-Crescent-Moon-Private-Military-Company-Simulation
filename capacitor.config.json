@@ -1,0 +1,7 @@
+{
+  "appId": "com.pcm.pmc.panel",
+  "appName": "천공월아 관리 패널",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "android": { "allowMixedContent": false, "backgroundColor": "#000000" }
+}

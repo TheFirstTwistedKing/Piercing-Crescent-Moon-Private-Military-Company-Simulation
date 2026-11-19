@@ -1,0 +1,30 @@
+{
+  "name": "pcm-pmc-panel",
+  "productName": "천공월아 관리 패널",
+  "version": "1.0.0",
+  "description": "천공월아민간군사기업 관리 패널 (Piercing Crescent Moon Private Military Company Management Panel)",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build:web": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch --serve",
+    "test:unit": "node scripts/test-core.mjs",
+    "electron:dev": "npm run build:web && electron .",
+    "dist:win": "npm run build:web && electron-builder --win --x64",
+    "cap:android": "npm run build:web && (test -d android || npx cap add android) && node scripts/android-prepare.mjs && npx cap sync android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/app": "^7.0.2",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "@fontsource-variable/noto-sans-kr": "^5.2.0",
+    "@fontsource/ibm-plex-mono": "^5.2.0",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "firebase": "^12.0.0",
+    "qrcode": "^1.5.4"
+  }
+}
