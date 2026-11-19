@@ -8,6 +8,12 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }
+    // 콜사인 중복 방지: 누구나 '존재 여부(get)'만 확인 가능, 생성은 본인 uid 로 1회만(이미 있으면 create 불가), 수정·삭제 불가
+    match /nicks/{key} {
+      allow get: if true;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid && request.resource.data.keys().hasOnly(['uid', 'nick']);
+      allow update, delete: if false;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }

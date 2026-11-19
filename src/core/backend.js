@@ -2,6 +2,7 @@
 // 로컬 모드는 Firebase 설정값이 비어 있을 때만 켜지며, UI 에 항상 표시된다. (계정이 이 기기 안에만 존재)
 import { firebaseConfig, isFirebaseConfigured } from '../config/firebase-config.js';
 import { hashSecret, verifySecret } from './crypto.js';
+import { nickKey } from './nick.js';
 
 let impl = null;
 export const backend = new Proxy({}, { get: (_, k) => (impl ? impl[k] : undefined) });
@@ -23,6 +24,7 @@ const KO_ERR = {
   'auth/network-request-failed': '네트워크 연결을 확인하세요.',
   'auth/operation-not-allowed': 'Firebase 콘솔에서 이메일/비밀번호 로그인이 비활성화되어 있습니다.',
   'auth/user-disabled': '비활성화된 계정입니다.',
+  'nick/taken': '이미 사용 중인 콜사인입니다. 다른 이름을 입력하세요.',
   'permission-denied': '권한이 없습니다. Firestore 보안 규칙을 확인하세요.',
   unavailable: '서버에 연결할 수 없습니다.',
 };
@@ -39,16 +41,23 @@ async function makeFirebase() {
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, nick: u.displayName || (u.email || '').split('@')[0] } : null);
   const wrap = async (fn) => { try { return await fn(); } catch (e) { e.userMessage = koError(e); throw e; } };
   const gameRef = (uid) => F.doc(db, 'users', uid, 'data', 'game');
+  const sub = (uid, col, id) => F.doc(db, 'users', uid, col, id);
+  const nickTaken = () => Object.assign(new Error('nick taken'), { code: 'nick/taken' });
 
   return {
     mode: 'firebase',
     label: 'FIREBASE',
     ready: () => new Promise((res) => { const off = A.onAuthStateChanged(auth, (u) => { off(); res(toUser(u)); }); }),
     current: () => toUser(auth.currentUser),
+    nickAvailable: (nick) => wrap(async () => !(await F.getDoc(F.doc(db, 'nicks', nickKey(nick)))).exists()),
     signUp: ({ email, password, nick }) => wrap(async () => {
+      const key = nickKey(nick);
+      if ((await F.getDoc(F.doc(db, 'nicks', key))).exists()) throw nickTaken();
       const cred = await A.createUserWithEmailAndPassword(auth, email, password);
+      try { await F.setDoc(F.doc(db, 'nicks', key), { uid: cred.user.uid, nick }); } // 규칙: 이미 있으면 create 불가 → 동시 가입 경쟁도 차단
+      catch { await A.deleteUser(cred.user).catch(() => {}); throw nickTaken(); }
       await A.updateProfile(cred.user, { displayName: nick });
-      await F.setDoc(F.doc(db, 'users', cred.user.uid), { nick, email, createdAt: F.serverTimestamp() }, { merge: true });
+      await F.setDoc(F.doc(db, 'users', cred.user.uid), { nick, nickKey: key, email, createdAt: F.serverTimestamp() }, { merge: true });
       return toUser(auth.currentUser);
     }),
     signIn: ({ email, password }) => wrap(async () => toUser((await A.signInWithEmailAndPassword(auth, email, password)).user)),
@@ -59,6 +68,17 @@ async function makeFirebase() {
     loadGame: (uid) => wrap(async () => { const s = await F.getDoc(gameRef(uid)); return s.exists() ? JSON.parse(s.data().json) : null; }),
     saveGame: (uid, state) => wrap(() => F.setDoc(gameRef(uid), { json: JSON.stringify(state), updatedAt: F.serverTimestamp() })),
     submitReport: (uid, report) => wrap(() => F.setDoc(F.doc(db, 'users', uid, 'reports', String(report.day).padStart(4, '0')), { json: JSON.stringify(report), day: report.day, createdAt: F.serverTimestamp() })),
+    // 기기 · 승인 요청 · 접속 세션
+    getDevice: (uid, id) => wrap(async () => { const x = await F.getDoc(sub(uid, 'devices', id)); return x.exists() ? { id, ...x.data() } : null; }),
+    putDevice: (uid, id, data) => wrap(() => F.setDoc(sub(uid, 'devices', id), data, { merge: true })),
+    delDevice: (uid, id) => wrap(() => F.deleteDoc(sub(uid, 'devices', id))),
+    listDevices: (uid) => wrap(async () => (await F.getDocs(F.collection(db, 'users', uid, 'devices'))).docs.map((d) => ({ id: d.id, ...d.data() }))),
+    getRequest: (uid, id) => wrap(async () => { const x = await F.getDoc(sub(uid, 'deviceRequests', id)); return x.exists() ? { id, ...x.data() } : null; }),
+    putRequest: (uid, id, data) => wrap(() => F.setDoc(sub(uid, 'deviceRequests', id), data)),
+    delRequest: (uid, id) => wrap(() => F.deleteDoc(sub(uid, 'deviceRequests', id))),
+    listRequests: (uid) => wrap(async () => (await F.getDocs(F.collection(db, 'users', uid, 'deviceRequests'))).docs.map((d) => ({ id: d.id, ...d.data() }))),
+    getSession: (uid) => wrap(async () => { const x = await F.getDoc(F.doc(db, 'users', uid, 'data', 'session')); return x.exists() ? x.data() : null; }),
+    putSession: (uid, data) => wrap(() => F.setDoc(F.doc(db, 'users', uid, 'data', 'session'), data)),
     listReports: (uid, n = 14) => wrap(async () => {
       const q = F.query(F.collection(db, 'users', uid, 'reports'), F.orderBy('day', 'desc'), F.limit(n));
       return (await F.getDocs(q)).docs.map((d) => JSON.parse(d.data().json));
@@ -71,7 +91,8 @@ function makeLocal() {
   const KEY = 'pcm.local.v1';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const save = (d) => localStorage.setItem(KEY, JSON.stringify(d));
-  const db = () => { const d = load(); d.users ||= {}; d.profiles ||= {}; d.games ||= {}; d.reports ||= {}; return d; };
+  const db = () => { const d = load(); d.users ||= {}; d.profiles ||= {}; d.games ||= {}; d.reports ||= {}; d.nicks ||= {}; d.devices ||= {}; d.requests ||= {}; d.sessions ||= {}; return d; };
+  const bucket = (d, kind, uid) => (d[kind][uid] ||= {});
   const fail = (code, msg) => Object.assign(new Error(msg), { code, userMessage: msg });
   const pub = (u) => (u ? { uid: u.uid, email: u.email, nick: u.nick } : null);
 
@@ -81,13 +102,15 @@ function makeLocal() {
     ready: async () => { const d = db(); return pub(d.users[d.session]); },
     current: () => { const d = db(); return pub(d.users[d.session]); },
     signUp: async ({ email, password, nick }) => {
-      const d = db(); const em = email.trim().toLowerCase();
+      const d = db(); const em = email.trim().toLowerCase(); const key = nickKey(nick);
+      if (d.nicks[key]) throw fail('nick/taken', KO_ERR['nick/taken']);
       if (Object.values(d.users).some((u) => u.email === em)) throw fail('auth/email-already-in-use', KO_ERR['auth/email-already-in-use']);
       const uid = 'local-' + crypto.randomUUID();
       d.users[uid] = { uid, email: em, nick, pw: await hashSecret(password, 60000) };
-      d.profiles[uid] = { nick, email: em, createdAt: Date.now() };
+      d.profiles[uid] = { nick, nickKey: key, email: em, createdAt: Date.now() }; d.nicks[key] = uid;
       d.session = uid; save(d); return pub(d.users[uid]);
     },
+    nickAvailable: async (nick) => !db().nicks[nickKey(nick)],
     signIn: async ({ email, password }) => {
       const d = db(); const em = email.trim().toLowerCase();
       const u = Object.values(d.users).find((x) => x.email === em);
@@ -101,6 +124,16 @@ function makeLocal() {
     loadGame: async (uid) => db().games[uid] || null,
     saveGame: async (uid, state) => { const d = db(); d.games[uid] = state; save(d); },
     submitReport: async (uid, report) => { const d = db(); (d.reports[uid] ||= {})[report.day] = report; save(d); },
+    getDevice: async (uid, id) => { const x = bucket(db(), 'devices', uid)[id]; return x ? { id, ...x } : null; },
+    putDevice: async (uid, id, data) => { const d = db(); const b = bucket(d, 'devices', uid); b[id] = { ...(b[id] || {}), ...data }; save(d); },
+    delDevice: async (uid, id) => { const d = db(); delete bucket(d, 'devices', uid)[id]; save(d); },
+    listDevices: async (uid) => Object.entries(bucket(db(), 'devices', uid)).map(([id, v]) => ({ id, ...v })),
+    getRequest: async (uid, id) => { const x = bucket(db(), 'requests', uid)[id]; return x ? { id, ...x } : null; },
+    putRequest: async (uid, id, data) => { const d = db(); bucket(d, 'requests', uid)[id] = data; save(d); },
+    delRequest: async (uid, id) => { const d = db(); delete bucket(d, 'requests', uid)[id]; save(d); },
+    listRequests: async (uid) => Object.entries(bucket(db(), 'requests', uid)).map(([id, v]) => ({ id, ...v })),
+    getSession: async (uid) => db().sessions[uid] || null,
+    putSession: async (uid, data) => { const d = db(); d.sessions[uid] = data; save(d); },
     listReports: async (uid, n = 14) => Object.values(db().reports[uid] || {}).sort((a, b) => b.day - a.day).slice(0, n),
   };
 }

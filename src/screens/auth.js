@@ -2,6 +2,7 @@
 import { backend, getBackend, koError } from '../core/backend.js';
 import * as Audio from '../core/audio.js';
 import { h, esc } from '../core/ui.js';
+import { nickProblem } from '../core/nick.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -58,7 +59,7 @@ export function mountSignup(root, ctx) {
   const err = h('p', { class: 'err', role: 'alert' });
   const submit = h('button', { class: 'btn primary', type: 'submit' }, '계정 생성');
   const form = h('form', { class: 'form', novalidate: true },
-    field({ id: 'nick', label: '콜사인(닉네임)', autocomplete: 'nickname', maxlength: 12, hint: '2~12자. 보고서와 화면에 표시됩니다.' }),
+    field({ id: 'nick', label: '콜사인(닉네임)', autocomplete: 'nickname', maxlength: 12, hint: '2~12자. 다른 사람과 같은 이름은 쓸 수 없습니다.' }),
     field({ id: 'email', label: '이메일', type: 'email', autocomplete: 'email', inputmode: 'email' }),
     field({ id: 'password', label: '비밀번호', type: 'password', autocomplete: 'new-password', hint: '8자 이상' }),
     field({ id: 'password2', label: '비밀번호 확인', type: 'password', autocomplete: 'new-password' }),
@@ -67,11 +68,17 @@ export function mountSignup(root, ctx) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault(); err.className = 'err'; err.textContent = '';
     const nick = form.nick.value.trim(), email = form.email.value.trim(), pw = form.password.value;
-    const bad = nick.length < 2 || nick.length > 12 ? '콜사인은 2~12자로 입력하세요.' : !EMAIL_RE.test(email) ? '이메일 형식이 올바르지 않습니다.' : pw.length < 8 ? '비밀번호는 8자 이상이어야 합니다.' : pw !== form.password2.value ? '비밀번호 확인이 일치하지 않습니다.' : '';
+    const bad = nickProblem(nick) ? nickProblem(nick) : !EMAIL_RE.test(email) ? '이메일 형식이 올바르지 않습니다.' : pw.length < 8 ? '비밀번호는 8자 이상이어야 합니다.' : pw !== form.password2.value ? '비밀번호 확인이 일치하지 않습니다.' : '';
     if (bad) { err.textContent = bad; Audio.sfx('error'); return; }
     submit.disabled = true; submit.textContent = '생성 중…';
     try { await ctx.signedUp(await backend.signUp({ email, password: pw, nick })); Audio.sfx('confirm'); }
     catch (ex) { err.textContent = koError(ex); Audio.sfx('error'); submit.disabled = false; submit.textContent = '계정 생성'; }
+  });
+  const nickEl = form.nick, nickHint = nickEl.parentElement.querySelector('.f-hint'); let nickSeq = 0;
+  nickEl.addEventListener('change', async () => {
+    const v = nickEl.value.trim(), mine = ++nickSeq; const p = nickProblem(v);
+    if (p) { nickHint.textContent = p; nickHint.style.color = 'var(--red)'; return; }
+    try { const ok = await backend.nickAvailable(v); if (mine !== nickSeq) return; nickHint.textContent = ok ? '사용할 수 있는 콜사인입니다.' : '이미 사용 중인 콜사인입니다.'; nickHint.style.color = ok ? 'var(--green)' : 'var(--red)'; } catch { /* 확인 실패 시 가입 단계에서 다시 검사 */ }
   });
   root.append(shell({ kicker: 'ACCESS / 02', title: '회원가입', sub: '계정을 만들면 이어서 2차 보안(인증 앱 + PIN)을 설정합니다.', form }));
   setTimeout(() => form.nick.focus(), 60);

@@ -2,6 +2,7 @@
 import { Sim } from './sim.js';
 import { World } from './render.js';
 import { backend } from '../core/backend.js';
+import { assertHolder } from '../core/session.js';
 
 const listeners = new Set();
 export const engine = {
@@ -42,7 +43,7 @@ export const engine = {
   async save() {
     if (!this.sim || !this.uid || this.saving) return;
     this.saving = true;
-    try { await backend.saveGame(this.uid, this.sim.serialize()); } catch (e) { console.warn('자동 저장 실패', e); }
+    try { await assertHolder(); await backend.saveGame(this.uid, this.sim.serialize()); } catch (e) { if (e.message !== 'session-lost') console.warn('자동 저장 실패', e); }
     this.saving = false;
   },
   // 성능 적응: 평균 FPS 가 40 아래로 2초 지속되면 품질을 낮추고, 58 이상이 8초 지속되면 올린다. (최저 30fps 유지가 목표)
