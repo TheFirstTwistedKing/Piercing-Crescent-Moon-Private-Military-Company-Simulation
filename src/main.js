@@ -15,6 +15,8 @@ import { mountField } from './screens/field.js';
 import { mountReport } from './screens/report.js';
 import { mountCustom } from './screens/custom.js';
 import { mountResearch } from './screens/research.js';
+import { mountShop } from './screens/shop.js';
+import { mountLeader } from './screens/leader.js';
 import { engine } from './game/engine.js';
 
 import * as Session from './core/session.js';
@@ -78,7 +80,7 @@ function startWatch() {
   }, 5000);
 }
 
-const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport, '#/panel/custom': mountCustom, '#/panel/research': mountResearch };
+const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport, '#/panel/custom': mountCustom, '#/panel/research': mountResearch, '#/panel/shop': mountShop, '#/panel/leader': mountLeader };
 
 let chain = Promise.resolve();
 function route(force = false) { chain = chain.then(() => doRoute(force)).catch((e) => console.error(e)); return chain; }
@@ -86,7 +88,7 @@ function route(force = false) { chain = chain.then(() => doRoute(force)).catch((
 async function doRoute(force) {
   if (S.booting) return;
   let hash = location.hash || '#/login', arg = null;
-  const cm = hash.match(/^(#\/panel\/custom)\/([\w-]+)$/); if (cm) { hash = cm[1]; arg = cm[2]; }
+  const cm = hash.match(/^(#\/panel\/(?:custom|leader))\/([\w-]+)$/); if (cm) { hash = cm[1]; arg = cm[2]; }
   let mount;
   if (!S.user) { hash = hash === '#/signup' ? '#/signup' : '#/login'; mount = hash === '#/signup' ? mountSignup : mountLogin; }
   else if (!S.profile?.mfa?.enabled) { hash = '#/setup'; mount = mountSetup; }

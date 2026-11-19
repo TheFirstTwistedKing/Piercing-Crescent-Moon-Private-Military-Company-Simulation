@@ -7,6 +7,7 @@ import { clockInfo, successChance, fmtCredits, MIN_PER_SEC } from '../game/sim.j
 import { WORLD_W, WORLD_H } from '../game/map.js';
 import { h, icon, modal, clamp, pad } from '../core/ui.js';
 import { buildSpeed } from './speed.js';
+import { WEATHERS, TASKS } from '../game/weather.js';
 import { WEAPON } from '../game/weapons.js';
 import { TRAIT, ABILITY } from '../game/traits.js';
 
@@ -81,9 +82,10 @@ export function mountField(root, ctx) {
   const clk = h('div', { class: 'hud-clock' }); const phase = h('em');
   const sp = buildSpeed(sim), speed = sp.el, paintSpeed = sp.paint;
   const bar = h('div', { class: 'meter' }, h('i'));
-  const paintHud = () => { const c = clockInfo(sim.clock); clk.replaceChildren(h('b', {}, `DAY ${pad(sim.day)}`), h('span', {}, c.text), h('em', { class: c.night ? 'night' : '' }, c.phase)); bar.firstChild.style.width = `${(sim.clock / 1260) * 100}%`; paintSpeed(); };
+  const wchip = h('span', { class: 'hud-weather' });
+  const paintHud = () => { const w = WEATHERS[sim.weather.today]; wchip.textContent = `${w.ko} · 적설 ${Math.round(sim.snow)}%`; wchip.title = w.desc; wchip.dataset.w = sim.weather.today; const c = clockInfo(sim.clock); clk.replaceChildren(h('b', {}, `DAY ${pad(sim.day)}`), h('span', {}, c.text), h('em', { class: c.night ? 'night' : '' }, c.phase)); bar.firstChild.style.width = `${(sim.clock / 1260) * 100}%`; paintSpeed(); };
   const hud = h('header', { class: 'hud' },
-    h('button', { class: 'back', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel'); }, html: `${icon('back', 18)}<span>메인 패널</span>` }), clk, speed, h('span', { class: 'grow' }),
+    h('button', { class: 'back', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel'); }, html: `${icon('back', 18)}<span>메인 패널</span>` }), clk, wchip, speed, h('span', { class: 'grow' }),
     h('button', { class: 'btn primary sm rep', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel/report'); } }, '보고서 올리기'), bar);
   const zoomBox = h('div', { class: 'zoombox' }, h('button', { class: 'icon-btn', type: 'button', 'aria-label': '확대', html: icon('plus'), onclick: () => setZoom(cam.zoom * 1.25) }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '축소', html: icon('minus'), onclick: () => setZoom(cam.zoom / 1.25) }),
     h('button', { class: 'icon-btn rtoggle', type: 'button', 'aria-label': '인원 목록', html: icon('list'), onclick: () => { rosterOpen = !rosterOpen; paintRoster(); } }));
@@ -95,7 +97,7 @@ export function mountField(root, ctx) {
     const tabs = h('div', { class: 'tabs' }, ...[['units', '인원'], ['log', '로그']].map(([k, l]) => h('button', { type: 'button', class: tab === k ? 'on' : '', onclick: () => { tab = k; paintRoster(); } }, l)), h('button', { class: 'icon-btn x', type: 'button', 'aria-label': '닫기', html: icon('close', 16), onclick: () => { rosterOpen = false; paintRoster(); } }));
     let body;
     if (tab === 'units') body = h('div', { class: 'rbody' }, ...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en, h('small', {}, d.ko)),
-      ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${sel === u.id ? 'on' : ''} ${u.hp < 25 ? 'hurt' : ''}`, onclick: () => select(u.id, true) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin)), h('small', {}, sim.statusText(u)), h('span', { class: 'hpbar' }, h('i', { style: `width:${u.hp}%` })))))));
+      ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${sel === u.id ? 'on' : ''} ${u.hp < 25 ? 'hurt' : ''}`, onclick: () => select(u.id, true) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin), u.isLeader ? h('span', { class: 'chip l ldchip' }, '팀장') : null), h('small', {}, sim.statusText(u)), h('span', { class: 'hpbar' }, h('i', { style: `width:${u.hp}%` })))))));
     else body = h('ol', { class: 'rbody log' }, ...sim.log.slice().reverse().map((e) => h('li', { class: e.kind }, h('time', {}, clockInfo(e.clock).text), h('span', {}, e.text))));
     roster.replaceChildren(tabs, body);
   };
@@ -109,7 +111,7 @@ export function mountField(root, ctx) {
     const u = sel && sim.byId[sel]; if (!u) { sheet.hidden = true; return; }
     sheet.hidden = false; const d = DEPT[u.dept], can = sim.canCommand(u), hurt = sim.isInjured(u);
     const head = h('header', {}, h('i', { class: 'dot big', style: `background:${d.color}` }), h('div', {}, h('b', {}, u.name), h('small', { class: 'lat' }, u.latin.toUpperCase()), h('small', {}, `${u.role} · ${d.no} ${d.en}`)), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '닫기', html: icon('close', 16), onclick: deselect }));
-    const chips = h('p', { class: 'chips' }, h('span', { class: 'chip' }, WEAPON[u.weapon].name), ...u.eq.map((t) => h('span', { class: `chip ${TRAIT[t].rarity}` }, TRAIT[t].name)), ...u.ab.map((a) => h('span', { class: 'chip ab' }, ABILITY[a].name)));
+    const chips = h('p', { class: 'chips' }, u.isLeader ? h('span', { class: 'chip l' }, '팀장') : null, h('span', { class: 'chip' }, WEAPON[u.weapon].name), ...u.eq.map((t) => h('span', { class: `chip ${TRAIT[t].rarity}` }, TRAIT[t].name)), ...u.ab.map((a) => h('span', { class: 'chip ab' }, ABILITY[a].name)));
     const info = h('div', { class: 'info' }, h('p', { class: 'stat-line' }, sim.statusText(u)), chips, bars(u), h('p', { class: 'stats' }, ...Object.entries(STAT_KO).map(([k, l]) => h('span', {}, l, h('b', {}, String(Math.round(u.dv[k])))))));
     let body;
     if (step === 'main') {
@@ -119,11 +121,14 @@ export function mountField(root, ctx) {
         cmd('임무 보내기', '정문을 나가 임무 수행 · 성공 시 보상', () => { step = 'mission'; paintSheet(); }, !can.ok || hurt, hurt ? '부상(HP 25 미만)' : can.reason),
         cmd('순찰 보내기', '정해진 경로를 돌며 경계', () => { step = 'patrol'; paintSheet(); }, !can.ok || hurt, hurt ? '부상(HP 25 미만)' : can.reason),
         cmd('대화 엿듣기', '혼잣말을 몰래 듣는다', () => openDlg(u.id), false, ''),
-        cmd('커스터마이징', '머리·무기·스탯·특성·능력', () => { Audio.sfx('select'); ctx.go('#/panel/custom/' + u.id); }, false, ''));
+        cmd('야외 작업', '재설 작업 · 용광로 발전으로 눈을 치운다', () => { step = 'work'; paintSheet(); }, !can.ok || hurt, hurt ? '부상(HP 25 미만)' : can.reason),
+        u.isLeader ? cmd('팀장 면담', '관리자와 직접 대화한다', () => { Audio.sfx('select'); ctx.go('#/panel/leader/' + u.dept); }, false, '') : null,
+        cmd('커스터마이징', '머리·무기·스탯·장비·특성·능력', () => { Audio.sfx('select'); ctx.go('#/panel/custom/' + u.id); }, false, ''));
     } else {
       const back = h('button', { class: 'link', type: 'button', onclick: () => { step = 'main'; paintSheet(); } }, '← 명령 목록');
       const done = (r, okMsg) => { if (!r.ok) { Audio.sfx('error'); toastLocal(r.reason); return; } Audio.sfx('send'); follow = u.id; if (okMsg) toastLocal(okMsg, 'order'); step = 'main'; paintSheet(); };
       if (step === 'room') body = h('div', { class: 'steps list' }, back, ...Object.entries(ROOM_LABEL).map(([k, l]) => h('button', { class: `opt ${u.home === k ? 'cur' : ''}`, type: 'button', onclick: () => done(sim.sendToRoom(u.id, k), `${u.name} → ${l}`) }, h('b', {}, l), h('small', {}, u.home === k ? '현재 배치' : DEPTS.find((x) => x.room === k)?.en || 'Lobby'))));
+      else if (step === 'work') body = h('div', { class: 'steps list' }, back, h('p', { class: 'sub-h' }, `현재 ${WEATHERS[sim.weather.today].ko} · 적설 ${Math.round(sim.snow)}%`), ...Object.entries(TASKS).map(([k, T]) => h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendWork(u.id, k), `${u.name} ${T.ko} 시작`) }, h('b', {}, T.ko), h('small', {}, `${T.desc} · 게임 ${fmtGame(T.dur)} (실제 약 ${fmtReal(T.dur / MIN_PER_SEC)})`))));
       else if (step === 'patrol') body = h('div', { class: 'steps list' }, back, ...PATROL_META.map((p) => h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendPatrol(u.id, p.id), `${u.name} 순찰 출발: ${p.name}`) }, h('b', {}, p.name), h('small', {}, `${p.desc} · 게임 ${fmtGame(p.dur)} (실제 약 ${fmtReal(p.dur / MIN_PER_SEC)})`))));
       else {
         const mk = (m) => { const p = sim.chance(u, m); return h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendMission(u.id, m.id)) }, h('b', {}, m.name), h('small', {}, `게임 ${fmtGame(m.dur)}(약 ${fmtReal(m.dur / MIN_PER_SEC)}) · 위험 ${Math.round(m.risk * 100)}% · ${fmtCredits(m.reward)} · 주요능력 ${STAT_KO[m.stat]}`), h('span', { class: `pct ${p < 0.5 ? 'low' : ''}` }, `${Math.round(p * 100)}%`)); };

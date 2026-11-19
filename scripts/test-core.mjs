@@ -9,6 +9,10 @@ import { HAIR_STYLES } from '../src/game/hair.js';
 import { WEAPONS } from '../src/game/weapons.js';
 import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
 import { RESEARCH, RESEARCH_BY_KEY } from '../src/game/research.js';
+import { WEATHERS, rollWeather, dailySnow, TASKS, START_SNOW } from '../src/game/weather.js';
+import { ITEMS, ITEM, STAT_ITEMS, EQUIPMENT, CONSUMABLES, FURNITURE, ROOM_KEYS, FURN_SLOTS, STAT_ITEM_CAP } from '../src/game/shop.js';
+import { LEADER_IDS, LEADER_TALK, REQUEST_COST } from '../src/game/leaders.js';
+import { SLOTS, FURNACE, yardWorkTiles, isOutdoor } from '../src/game/map.js';
 import { ROSTER, DEPTS, MISSIONS, MISSION, MONO } from '../src/game/data.js';
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
@@ -204,5 +208,77 @@ await t('이름 변경: 검증·중복 방지·초기화·저장 복원', () => 
 await t('혼잣말: 초승달 없는 새 대사 10개 추가', () => {
   assert.equal(MONO.generic.length, 14); assert.equal(MONO.generic.filter((x) => x.includes('초승달')).length, 1, '기존 1개만 유지');
   assert.equal(new Set(MONO.generic).size, 14);
+});
+
+await t('날씨: 분포 35/20/20/25, 효과는 한파(이동↓)·안개(성공률↓)에만', () => {
+  const c = { clear: 0, rain: 0, fog: 0, cold: 0 }; for (let i = 0; i < 40000; i++) c[rollWeather(Math.random)]++;
+  for (const [k, w] of [['clear', 0.35], ['rain', 0.2], ['fog', 0.2], ['cold', 0.25]]) assert.ok(Math.abs(c[k] / 40000 - w) < 0.015, k);
+  assert.ok(WEATHERS.cold.speed < 0 && WEATHERS.fog.succ < 0 && !WEATHERS.clear.speed && !WEATHERS.clear.succ && !WEATHERS.rain.speed && !WEATHERS.rain.succ && !WEATHERS.cold.succ && !WEATHERS.fog.speed);
+  const dist = (w, snow = 0) => { const s = new Sim(null, () => 0.5); s.weather.today = w; s.snow = snow; s.setSpeed(1); const u = s.byId.c04; s.sendToRoom('c04', 'medical'); const x0 = u.x, y0 = u.y; for (let i = 0; i < 15; i++) s.update(0.1); return Math.hypot(u.x - x0, u.y - y0); };
+  const clear = dist('clear'), cold = dist('cold'), rain = dist('rain'); assert.ok(cold < clear * 0.85, `한파 ${cold} < 맑음 ${clear}`); assert.ok(Math.abs(rain - clear) < 1e-6, '비는 이동 속도에 영향 없음');
+  const s = new Sim(null, () => 0.5), u = s.byId.c06, m = MISSION.rg3; const base = s.chance(u, m); s.weather.today = 'fog'; assert.ok(Math.abs(base - s.chance(u, m) - 0.1) < 1e-9, '안개 -10%p');
+  s.weather.today = 'cold'; assert.equal(s.chance(u, m), base, '한파는 성공률 영향 없음');
+  s.weather.today = 'fog'; u.gear.acc = 'eq_goggles'; s.refresh(); assert.equal(s.chance(u, m), base, '안개 고글은 안개 무시');
+});
+await t('적설: 날마다 날씨에 따라 변하고, 야외에서만 이동이 느려진다', () => {
+  assert.equal(dailySnow(50, 'cold'), 75); assert.equal(dailySnow(50, 'rain'), 30); assert.equal(dailySnow(98, 'cold'), 100); assert.equal(dailySnow(3, 'rain'), 0); assert.equal(START_SNOW, 40);
+  assert.ok(isOutdoor(2, 2) && !isOutdoor(10, 8));
+  const run = (snow) => { const s = new Sim(null, () => 0.5); s.weather.today = 'clear'; s.snow = snow; s.setSpeed(1); const u = s.byId.c04; u.place(2, 17); u.path = [[2, 16], [2, 15], [2, 14], [2, 13], [2, 12], [2, 11], [2, 10]]; u.mode = 'goto'; for (let i = 0; i < 10; i++) s.update(0.1); return Math.abs(u.y - (17 * 16 + 15)); };
+  assert.ok(run(100) < run(0) * 0.9, '눈이 쌓인 마당이 더 느림');
+  const s = new Sim(null, () => 0.5); s.weather = { today: 'clear', next: 'cold' }; s.snow = 50; s.setSpeed(2); s.update(0.1); const rep = s.buildReport(); s.nextDay(rep); assert.equal(s.weather.today, 'cold'); assert.equal(s.snow, 75, '새 날씨(한파)의 적설 +25'); assert.ok(['clear', 'rain', 'fog', 'cold'].includes(s.weather.next));
+});
+await t('재설 작업·용광로 발전: 적설 감소, 용광로는 1명만, 저장/복원', () => {
+  const s = new Sim(null, () => 0.4); s.snow = 80; s.setSpeed(3 === 3 ? 2 : 1);
+  assert.ok(s.sendWork('c19', 'snow').ok); assert.ok(s.sendWork('c22', 'furnace').ok); assert.equal(s.sendWork('c20', 'furnace').ok, false, '용광로 중복 불가');
+  let guard = 0; while ((s.byId.c19.mode === 'work' || s.byId.c22.mode === 'work') && guard++ < 30000) s.update(0.1);
+  assert.ok(s.snow < 80 - 20, `적설 ${s.snow}`); assert.equal(s.byId.c19.mode === 'work', false); assert.ok(s.dayLog.orders >= 2);
+  const e = new Sim(null, () => 0.4); e.snow = 0; assert.equal(e.sendWork('c19', 'snow').ok, false, '눈이 없으면 재설 불가'); assert.ok(e.sendWork('c19', 'furnace').ok);
+  e.setSpeed(2); for (let i = 0; i < 4000 && !e.furnaceActive; i++) e.update(0.1); assert.ok(e.furnaceActive, '도착하면 가동'); const snap = JSON.parse(JSON.stringify(e.serialize())); const f = new Sim(snap, () => 0.4);
+  assert.equal(f.byId.c19.mode, 'work'); assert.equal(f.byId.c19.work.kind, 'furnace'); assert.ok(f.furnaceActive);
+  const [fx, fy] = FURNACE.spot; assert.ok(!yardWorkTiles().some(([x, y]) => x === fx && y === fy), '재설 장소와 용광로 자리는 분리');
+  const o = new Sim(null, () => 0.4); o.sendWork('c19', 'snow'); o.sendToRoom('c19', 'aerial'); assert.equal(o.byId.c19.work, null, '다른 명령이 작업을 취소');
+});
+await t('상점 품목: 능력치 6 · 장비 10 · 소모품 5 · 가구 40(고유), 구매·자금', () => {
+  assert.equal(STAT_ITEMS.length, 6); assert.equal(EQUIPMENT.length, 10); assert.equal(CONSUMABLES.length, 5); assert.equal(FURNITURE.length, 40); assert.equal(new Set(ITEMS.map((i) => i.id)).size, 61);
+  assert.equal(new Set(FURNITURE.map((f) => f.name)).size, 40); for (const f of FURNITURE) assert.ok(Object.keys(f.fx).length >= 1 && f.price > 0, f.id);
+  const s = new Sim(null, () => 0.5), f0 = s.funds; assert.ok(s.buy('cs_medkit', 2).ok); assert.equal(s.funds, f0 - 1200); assert.equal(s.owned('cs_medkit'), 2);
+  s.funds = 100; assert.equal(s.buy('fn16').ok, false, '자금 부족'); assert.equal(s.owned('fn16'), 0); assert.equal(s.buy('nope').ok, false);
+});
+await t('아이템: 능력치 증표(+1, 최대 +3), 장비 장착/해제, 소모품 효과, 임무 지원 키트', () => {
+  const s = new Sim(null, () => 0.5); s.funds = 1e6; const u = s.byId.c06; s.resetStats('c06'); const s0 = u.cs.str;
+  for (let i = 0; i < 4; i++) s.buy('st_str'); for (let i = 0; i < 3; i++) assert.ok(s.useStatItem('c06', 'st_str').ok); assert.equal(s.useStatItem('c06', 'st_str').ok, false, '최대 +3'); assert.equal(u.cs.str, s0 + 3); assert.equal(s.owned('st_str'), 1);
+  s.buy('eq_vest'); s.buy('eq_leather'); assert.ok(s.equipGear('c06', 'eq_vest').ok); const dmg1 = u.fx.dmg; assert.ok(s.equipGear('c06', 'eq_leather').ok, '같은 칸 교체'); assert.equal(s.owned('eq_vest'), 1, '교체한 장비는 인벤토리로'); assert.ok(u.fx.dmg > dmg1 - 1e-9);
+  assert.ok(s.unequipGear('c06', 'armor').ok); assert.equal(u.gear.armor, null); assert.equal(s.owned('eq_leather'), 1); assert.equal(s.unequipGear('c06', 'armor').ok, false);
+  s.buy('cs_medkit'); u.hp = 30; assert.ok(s.useConsumable('c06', 'cs_medkit').ok); assert.equal(u.hp, 70); s.buy('cs_medkit'); u.hp = 100; assert.equal(s.useConsumable('c06', 'cs_medkit').ok, false, 'HP 가득');
+  s.buy('cs_ration'); u.mor = 50; assert.ok(s.useConsumable('c06', 'cs_ration').ok); assert.equal(u.mor, 70);
+  const m = MISSION.rg3, b = s.chance(u, m); s.buy('cs_kit'); assert.ok(s.useConsumable('c06', 'cs_kit').ok); assert.ok(Math.abs(s.chance(u, m) - b - 0.1) < 1e-9, '키트 +10%p'); assert.equal(s.useConsumable('c06', 'cs_kit').ok, false, '중복 적용 불가');
+  u.mission = { id: 'rg3', remaining: 0 }; s.finishMission(u); assert.equal(u.kit, false, '임무 후 소모');
+  s.buy('cs_warm'); s.weather.today = 'cold'; const spdBefore = 1; assert.ok(s.useConsumable('c06', 'cs_warm').ok); assert.equal(u.warm, s.day);
+  s.buy('eq_parka'); s.equipGear('c06', 'eq_parka'); assert.equal(u.fx.coldProof, true);
+});
+await t('가구: 방마다 4칸, 배치/회수, 효과·선호 방 ×1.5, 유지비, 길이 막히지 않음, 저장/복원', () => {
+  for (const k of ROOM_KEYS) assert.equal(SLOTS[k].length, FURN_SLOTS, k);
+  const s = new Sim(null, () => 0.5); s.funds = 1e7; s.buy('fn31', 2); s.buy('fn06');
+  const nurse = s.byId.c13, grunt = s.byId.c04, h0 = nurse.fx.heal;
+  assert.ok(s.placeFurniture('medical', 0, 'fn31').ok); assert.ok(Math.abs(nurse.fx.heal - h0 - 0.2 * 1.5) < 1e-9, '선호 방 ×1.5'); assert.ok(Math.abs(s.byId.c14.fx.heal - (nurse.fx.heal)) < 1e-9, '같은 방 거주자 모두 적용');
+  assert.equal(s.placeFurniture('medical', 0, 'fn31').ok, false, '이미 놓인 자리'); assert.ok(s.placeFurniture('rager', 1, 'fn31').ok); assert.ok(Math.abs(grunt.fx.heal - 0.2) < 1e-9, '다른 방은 ×1.0');
+  const up0 = s.buildReport(true).upkeep; assert.ok(s.placeFurniture('rager', 2, 'fn06').ok); assert.equal(s.buildReport(true).upkeep - up0, 100, '유지비는 가구 1개 기준');
+  assert.ok(s.removeFurniture('rager', 2).ok); assert.equal(s.owned('fn06'), 1); assert.equal(s.removeFurniture('rager', 2).ok, false);
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const r = new Sim(snap, () => 0.5); assert.equal(r.placed.medical[0], 'fn31'); assert.equal(r.owned('fn31'), 0); assert.ok(r.byId.c13.fx.heal > 0.2);
+  // 모든 칸을 채워도 모든 방의 모든 타일이 정문과 연결
+  const f = new Sim(null, () => 0.5); f.funds = 1e8; let n = 0; for (const k of ROOM_KEYS) for (let i = 0; i < FURN_SLOTS; i++) { const id = FURNITURE[n++ % 40].id; f.buy(id); assert.ok(f.placeFurniture(k, i, id).ok); }
+  for (const k of [...Object.keys(ROOMS), 'lobby']) for (const [x, y] of roomFreeTiles(k)) assert.ok(findPath(x, y, GATE.x, GATE.y), `${k} (${x},${y}) 길 막힘`);
+  const g = new Sim(null, () => 0.5); assert.ok(findPath(SLOTS.operation[0][0], SLOTS.operation[0][1], GATE.x, GATE.y) !== null, '새 Sim 은 자리를 비워 둠');
+});
+await t('팀장: 부서마다 고정 1명, 대화(보고·격려·지원 요청), 하루 1회 제한, 친밀도·감화, 저장', () => {
+  assert.equal(Object.keys(LEADER_IDS).length, 8); for (const d of DEPTS) { const L = new Sim(null, () => 0.5).leaderUnit(d.key); assert.equal(L.dept, d.key); assert.ok(L.isLeader); assert.ok(LEADER_TALK[L.id].report.length >= 2); }
+  assert.equal(ROSTER.filter((r) => Object.values(LEADER_IDS).includes(r.id)).length, 8);
+  const s = new Sim(null, () => 0.5); s.funds = 10000; const L = s.leaderUnit('rager'), mate = s.byId.c05; mate.mor = 40;
+  const r = s.talkLeader('rager', 'report'); assert.ok(r.ok && r.lines.length >= 2 && r.lines[1].includes('부서원 3명'));
+  const a0 = mate.fx.succ; assert.ok(s.talkLeader('rager', 'encourage').ok); assert.equal(mate.mor, 48); assert.equal(L.aff, 1); assert.ok(mate.fx.succ > a0, '친밀도로 감화 증가'); assert.equal(s.talkLeader('rager', 'encourage').ok, false, '하루 1회');
+  const f0 = s.funds; assert.ok(s.talkLeader('rager', 'request').ok); assert.equal(s.funds, f0 - REQUEST_COST); assert.equal(s.talkLeader('rager', 'request').ok, false); s.funds = 10; assert.equal(s.talkLeader('medical', 'request').ok, false, '자금 부족');
+  assert.equal(L.fx.succ <= mate.fx.succ, true, '팀장 본인은 감화 대상 아님'); assert.equal(L.aura, 0);
+  const x = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(x.leaderUnit('rager').aff, 2); assert.equal(x.talkLeader('rager', 'encourage').ok, false, '하루 1회 상태도 저장');
+  s.nextDay(s.buildReport()); assert.ok(s.talkLeader('rager', 'encourage').ok, '다음 날 다시 가능');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

@@ -26,7 +26,7 @@ export function mountReport(root, ctx) {
     const head = h('header', { class: 'bar' }, h('button', { class: 'back', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel'); }, html: `${icon('back', 18)}<span>메인 패널</span>` }), h('div', { class: 'bar-title' }, h('b', {}, '오늘의 보고서'), h('small', {}, 'DAILY REPORT')));
     const doc = h('article', { class: 'doc' },
       h('p', { class: 'eyebrow' }, submitted ? 'SUBMITTED' : 'DRAFT'), h('h1', {}, `DAY ${pad(r.day)}`),
-      h('p', { class: 'lede' }, `${c.text} 기준 · ${r.summary}`),
+      h('p', { class: 'lede' }, `${c.text} 기준 · ${r.summary}${r.weather ? ` 날씨 ${r.weather} · 적설 ${r.snow}%.` : ''}`),
       h('dl', { class: 'kv wide' }, h('div', {}, h('dt', {}, '수입'), h('dd', {}, fmtCredits(r.income))), h('div', {}, h('dt', {}, '운영비'), h('dd', {}, fmtCredits(-r.upkeep))), h('div', {}, h('dt', {}, '자금 변동'), h('dd', { class: delta < 0 ? 'neg' : 'pos' }, `${delta >= 0 ? '+' : ''}${fmtCredits(delta)}`)), h('div', {}, h('dt', {}, '평판'), h('dd', {}, String(r.rep)))),
       live ? h('p', { class: 'note' }, `진행 중인 임무·순찰 ${live}건은 제출하는 순간 마감 정산됩니다.`) : null,
       section('01', '부서별 실적', table(['부서', '인원', '임무 (성/부/실)', '순찰', '수입', '평균 HP'], r.depts.map((d) => [td(h('i', { class: 'dot', style: `background:${DEPT[d.key].color}` }), d.en, h('small', {}, ` ${d.ko}`)), d.members, `${d.missions} (${d.success}/${d.partial}/${d.fail})`, d.patrols, fmtCredits(d.income), d.avgHp]))),
