@@ -1,5 +1,5 @@
 // `npx cap add android` 직후 실행: 앱 아이콘 교체 + 화면 설정(가로/세로 모두, 상태바 색)을 적용한다.
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -30,5 +30,22 @@ if (existsSync(styles)) {
   let x = readFileSync(styles, 'utf8');
   if (!x.includes('android:statusBarColor')) x = x.replace('<style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">', '<style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">\n        <item name="android:statusBarColor">#000000</item>\n        <item name="android:navigationBarColor">#000000</item>');
   writeFileSync(styles, x);
+}
+
+// ── 서명 키 고정 + 버전 ──
+// 서명 키가 빌드마다 달라지면 Android 가 업데이트 설치를 "패키지가 기존 패키지와 충돌합니다"로 거부한다.
+// 그래서 저장소의 android-signing/pcm.jks 로 항상 같은 키로 서명하고, versionCode 는 시간 기준으로 항상 증가시킨다.
+const gradle = 'android/app/build.gradle';
+if (existsSync(gradle)) {
+  copyFileSync('android-signing/pcm.jks', 'android/app/pcm.jks');
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  let g = readFileSync(gradle, 'utf8');
+  g = g.replace(/versionCode \d+/, `versionCode ${Math.floor(Date.now() / 60000)}`).replace(/versionName "[^"]*"/, `versionName "${pkg.version}.${process.env.GITHUB_RUN_NUMBER || 'dev'}"`);
+  if (!g.includes('signingConfigs')) {
+    g = g.replace('    buildTypes {', "    signingConfigs {\n        pcm {\n            storeFile file('pcm.jks')\n            storePassword 'pcm-panel-2026'\n            keyAlias 'pcm'\n            keyPassword 'pcm-panel-2026'\n        }\n    }\n    buildTypes {");
+    g = g.replace('        release {', '        debug {\n            signingConfig signingConfigs.pcm\n        }\n        release {\n            signingConfig signingConfigs.pcm');
+  }
+  writeFileSync(gradle, g);
+  console.log('서명 키 고정 / 버전 설정 완료');
 }
 console.log('android 준비 완료');

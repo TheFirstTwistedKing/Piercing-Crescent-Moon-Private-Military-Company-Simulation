@@ -56,6 +56,11 @@ npm run cap:android    # android/ 생성·동기화, 이후 android/ 에서 ./gr
 **자동 빌드**: `main` 에 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 exe 와 apk 를 만들어 **Releases** 에 올립니다. 수동 실행은 Actions 탭 → *Build exe + apk* → Run workflow.
 apk 는 디버그 서명이라 바로 설치되지만 Play 스토어 배포용이 아닙니다(배포하려면 릴리스 키로 서명하세요).
 
+### apk 업데이트 시 “패키지가 기존 패키지와 충돌합니다” 오류
+원인은 **서명 키가 빌드마다 달라서**입니다. CI 서버는 빌드할 때마다 새 디버그 키를 만들기 때문에, 이미 설치한 앱 위에 새 apk 를 설치하면 Android 가 거부합니다. 이제 `android-signing/pcm.jks` 로 **항상 같은 키로 서명**하고 `versionCode` 는 시간 기준으로 계속 늘어납니다(`scripts/android-prepare.mjs`).
+- **이 수정 이전에 설치한 앱은 한 번만 삭제 후 새로 설치**해야 합니다. (이후 업데이트는 덮어쓰기로 됩니다. Firebase 로 로그인했다면 게임 데이터는 서버에 있어 유지되고, “로컬 시험 모드”였다면 기기 안의 데이터는 삭제됩니다.)
+- 키 파일과 비밀번호는 저장소에 들어 있는 **개인 사이드로딩용 키**입니다. 저장소가 공개라면 누구나 같은 키로 서명할 수 있으니, 공개 배포를 한다면 새 키를 만들어 GitHub Secret 으로 옮기세요(그때는 한 번 더 삭제 후 재설치가 필요합니다).
+
 ## 4. 디자인 메모
 - 방향: *냉전기 홀로그램 터미널* — 검정 + 얼음빛 은백색, 신호 색은 호박(amber) 하나. 폰트는 Noto Sans KR + IBM Plex Mono 두 가지.
 - 홀로그램 그리드/스캔라인: 선(1px)만 사용, 64px 간격(면적 약 3%), 스캔 9초 주기. 촘촘한 구멍 패턴(트립포비아)·초당 3회 초과 점멸(광과민)을 피했고 `prefers-reduced-motion` 을 존중합니다.
