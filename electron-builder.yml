@@ -1,0 +1,26 @@
+appId: com.pcm.pmc.panel
+productName: 천공월아 관리 패널
+executableName: PCM-Panel
+copyright: Piercing Crescent Moon PMC
+directories: { output: dist, buildResources: build }
+files:
+  - electron/**
+  - www/**
+  - build/icon.png
+  - package.json
+  - '!node_modules'
+asar: true
+compression: normal
+win:
+  icon: build/icon.ico
+  target:
+    - { target: nsis, arch: [x64] }
+    - { target: portable, arch: [x64] }
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: 천공월아 관리 패널
+  artifactName: PCM-Panel-Setup-${version}.${ext}
+portable:
+  artifactName: PCM-Panel-Portable-${version}.${ext}

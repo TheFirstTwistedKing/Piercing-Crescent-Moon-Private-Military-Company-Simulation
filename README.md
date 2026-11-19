@@ -1,1 +1,46 @@
-# Piercing Crescent Moon Private Military Company Simulation
+# 천공월아민간군사기업 관리 패널
+Piercing Crescent Moon Private Military Company Management Panel
+
+웹 · Windows(exe) · Android(apk)로 동작하는 관리 패널 앱. 한 벌의 코드(`src/`)를 `www/`로 번들해 세 곳에서 모두 사용합니다.
+
+## 기능
+- **인트로**: 검은 화면에서 오른쪽→왼쪽으로 스캔되며 로고가 드러나고 제목·부제가 해독됩니다. 전력 활성화 효과음이 스캔과 동기화됩니다. 다시보기 버튼은 없고, 앱을 나갔다 들어오면(새로 실행) 다시 재생됩니다.
+- **로그인 / 회원가입**: 별도 화면. Firebase Authentication(이메일+비밀번호), 계정별 데이터는 Firestore.
+- **2차 보안**: 인증 앱(TOTP) + 6자리 PIN, 복구 코드 8개(1회용). 접속할 때마다 확인합니다.
+- **메인 패널**: CCTV 캠 / 현장 지휘 / 오늘의 보고서 올리기. 사운드 끄기는 이 화면에만 있습니다.
+- **CCTV 캠**: 기지 10개 채널(부서 방 8 + 복도 + 정문), 확대 보기.
+- **현장 지휘(쯔꾸르 스타일)**: 화면 이동(드래그/WASD/핀치), 캐릭터를 눌러 *방으로 보내기 · 임무 보내기 · 순찰 보내기 · 대화 엿듣기*(혼잣말).
+- **시간**: 하루 = 아침 12시간 + 밤 9시간(게임 내 06:00→03:00), 1배속 실제 12분. 정지 / 재생 / 2배속. 보고서를 올리면 하루가 끝나고 다음 날이 시작됩니다.
+- **8개 부서 · 24명**: Operation, Rager, Defencer, Requester, Medical, Raider, Aerial Striker, Carrier. 각 인원에 라틴어 코드네임이 있습니다.
+
+## 1. Firebase 설정 (필수 — 다른 사람도 다른 계정으로 로그인하려면)
+1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트 생성 → **웹 앱 추가** → `firebaseConfig` 복사.
+2. **Authentication → 로그인 방법 → 이메일/비밀번호** 사용 설정.
+3. **Firestore Database** 생성(프로덕션 모드) 후 이 저장소의 `firestore.rules` 내용을 규칙에 붙여넣고 게시 (`firebase deploy --only firestore:rules` 도 가능).
+4. `src/config/firebase-config.js` 의 `placeholder` 값을 복사한 값으로 교체하고 커밋. 또는 GitHub 저장소 *Settings → Secrets → Actions* 에 `FIREBASE_CONFIG_JSON`(firebaseConfig 를 JSON 한 줄로)을 등록하면 CI 빌드에 주입됩니다.
+5. API 키에 **HTTP 리퍼러 제한을 걸었다면** exe(`file://`)·apk(`https://localhost`)에서 막힐 수 있으니 제한 없이 두거나 Firebase 콘솔에서 허용 도메인을 확인하세요.
+
+설정값이 비어 있으면 앱은 **로컬 시험 모드**로 동작하며 로그인 화면에 `LOCAL TEST`가 표시됩니다(계정이 그 기기 안에만 존재).
+
+## 2. 2차 보안에 대한 정직한 설명
+검증이 앱(클라이언트) 안에서 이뤄지고 TOTP 비밀값·PIN 해시가 사용자 본인의 Firestore 문서에 저장됩니다. 따라서 **비밀번호를 알고 Firestore 를 직접 읽을 수 있는 공격자**에게는 우회될 수 있습니다. 자리를 비운 사이의 접근, 비밀번호만 유출된 상황 등을 막는 용도이며, 강한 보안이 필요하면 Firebase Identity Platform 공식 MFA 로 전환하세요.
+- 인증 앱을 잃었을 때: 복구 코드 사용. 모두 잃으면 Firebase 콘솔에서 `users/{uid}` 문서의 `mfa` 필드를 삭제하면 다음 로그인 때 재설정됩니다.
+- 5회 연속 실패 시 30초부터 잠금(장치 단위).
+
+## 3. 개발 / 빌드
+```bash
+npm install
+npm run test:unit      # 코어 로직 테스트(TOTP RFC 6238 벡터, 맵, 시뮬레이션)
+npm run build:web      # www/ 생성
+npm run dev            # http://localhost:5173 (watch + 서버)
+npm run electron:dev   # 데스크톱 창으로 실행
+npm run dist:win       # Windows exe(설치형 + 포터블) → dist/   (Windows 에서 실행 권장)
+npm run cap:android    # android/ 생성·동기화, 이후 android/ 에서 ./gradlew assembleDebug
+```
+**자동 빌드**: `main` 에 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 exe 와 apk 를 만들어 **Releases** 에 올립니다. 수동 실행은 Actions 탭 → *Build exe + apk* → Run workflow.
+apk 는 디버그 서명이라 바로 설치되지만 Play 스토어 배포용이 아닙니다(배포하려면 릴리스 키로 서명하세요).
+
+## 4. 디자인 메모
+- 방향: *냉전기 홀로그램 터미널* — 검정 + 얼음빛 은백색, 신호 색은 호박(amber) 하나. 폰트는 Noto Sans KR + IBM Plex Mono 두 가지.
+- 홀로그램 그리드/스캔라인: 선(1px)만 사용, 64px 간격(면적 약 3%), 스캔 9초 주기. 촘촘한 구멍 패턴(트립포비아)·초당 3회 초과 점멸(광과민)을 피했고 `prefers-reduced-motion` 을 존중합니다.
+- 성능: FPS 가 40 미만으로 2초 지속되면 장식 효과를 자동 단계 하향(최저 30fps 유지가 목표).
