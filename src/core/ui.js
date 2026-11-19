@@ -19,6 +19,9 @@ export function h(tag, props, ...kids) {
 
 const P = {
   back: '<path d="M15 5l-7 7 7 7"/>', play: '<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>', pause: '<path d="M8 5v14M16 5v14"/>',
+  fast3: '<path d="M2 5v14l6-7zM8 5v14l6-7zM14 5v14l6-7z" fill="currentColor" stroke="none"/>',
+  user: '<path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+  flask: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M8 15h8"/>',
   fast: '<path d="M4 5v14l8-7zM12 5v14l8-7z" fill="currentColor" stroke="none"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', logout: '<path d="M10 4H5v16h5M15 8l4 4-4 4M9 12h10"/>',
   vol: '<path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/>', mute: '<path d="M4 9v6h4l5 4V5L8 9zM17 9l5 6M22 9l-5 6"/>',

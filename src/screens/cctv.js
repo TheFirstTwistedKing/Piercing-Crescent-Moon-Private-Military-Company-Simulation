@@ -5,6 +5,7 @@ import { drawFeed, CAMERAS, CAM_W, CAM_H } from '../game/render.js';
 import { ROOM_LABEL, DEPT } from '../game/data.js';
 import { clockInfo } from '../game/sim.js';
 import { h, icon } from '../core/ui.js';
+import { buildSpeed } from './speed.js';
 
 const NAMES = { gate: '정문 / 마당' };
 
@@ -47,9 +48,7 @@ export function mountCctv(root, ctx) {
     if ((rosterT += dt) > 0.5) { rosterT = 0; paintRoster(); }
   });
 
-  const speed = h('div', { class: 'speed' }, ...[['pause', 0, '정지'], ['play', 1, '재생'], ['fast', 2, '2배속']].map(([ic, v, label]) => h('button', { class: 'icon-btn', type: 'button', 'data-s': v, 'aria-label': label, title: label, html: icon(ic, 18), onclick: () => { sim.setSpeed(v); Audio.sfx('click'); paintSpeed(); } })));
-  const paintSpeed = () => speed.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.s === sim.speed));
-  paintSpeed();
+  const sp = buildSpeed(sim), speed = sp.el, paintSpeed = sp.paint;
   const clk = h('span', { class: 'clk' }); const tick = setInterval(() => { const c = clockInfo(sim.clock); clk.textContent = `DAY ${String(sim.day).padStart(3, '0')} · ${c.text} ${c.phase}`; paintSpeed(); }, 400);
 
   root.append(h('div', { class: 'cctv screen' },

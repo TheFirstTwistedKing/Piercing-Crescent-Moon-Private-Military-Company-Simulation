@@ -44,6 +44,12 @@ export const ROSTER = [
   { id: 'c24', name: '곽민재', role: '물류 담당', dept: 'carrier', stats: S(46, 66, 72, 40, 56), look: { skin: '#d8ac88', hair: '#0f0f10', coat: '#634428', coat2: '#412c19', pants: '#241f19', hat: 'none', extra: 'mask' } },
 ];
 
+// 성별 · 기본 머리 스타일 · 기본 무기 (커스터마이징으로 변경 가능)
+const FEMALE = new Set(['c01', 'c05', 'c08', 'c10', 'c12', 'c13', 'c17', 'c19', 'c21', 'c23']);
+const HAIR0 = { c01: 'f1', c02: 'm3', c03: 'm1', c04: 'm2', c05: 'f3', c06: 'm9', c07: 'm4', c08: 'f2', c09: 'm1', c10: 'f7', c11: 'm8', c12: 'f9', c13: 'f5', c14: 'm3', c15: 'm5', c16: 'm7', c17: 'f4', c18: 'm2', c19: 'f6', c20: 'm6', c21: 'f10', c22: 'm4', c23: 'f8', c24: 'm10' };
+const WEAPON0 = { c01: 'rapier', c02: 'dagger', c03: 'shortsword', c04: 'battleaxe', c05: 'hammer', c06: 'gauntlet', c07: 'shield', c08: 'longsword', c09: 'spear', c10: 'shortsword', c11: 'dagger', c12: 'shortsword', c13: 'dagger', c14: 'dagger', c15: 'shortsword', c16: 'dagger', c17: 'rapier', c18: 'handaxe', c19: 'spear', c20: 'spear', c21: 'rapier', c22: 'hammer', c23: 'handaxe', c24: 'greathammer' };
+for (const r of ROSTER) { r.gender = FEMALE.has(r.id) ? 'f' : 'm'; r.look.hairStyle = HAIR0[r.id]; r.weapon = WEAPON0[r.id]; }
+
 // 라틴어 코드네임 — 각자의 역할을 뜻하는 라틴어 단어(예: 총괄 지휘관 = Imperatrix, 방패 = Murus)
 const LATIN = {
   c01: 'Imperatrix', c02: 'Consilium', c03: 'Arcanus',
@@ -192,5 +198,15 @@ export const MONO = {
     '초승달이 뜨면 일이 많아지더라. 미신이라 생각하지만.',
     '오늘 하루도 무사히. 그걸로 충분해.',
     '창문으로 들어오는 빛 한 줄. 이 정도면 쉬어도 되겠다 싶네.',
+    '지도 위의 점 하나하나가 사람이라는 걸, 가끔 잊으려고 노력해.',
+    '오늘 점심이 뭐였더라… 기억이 안 날 정도면 꽤 바빴다는 뜻이겠지.',
+    '규칙은 많을수록 좋아. 어길 때 이유를 만들기 쉬우니까.',
+    '장비는 거짓말을 안 해. 손질한 만큼만 돌려주거든.',
+    '시계를 보면 시간이 느려지고, 안 보면 더 느려져.',
+    '믿을 수 있는 사람이 셋이면 충분해. 지금은 둘인가…',
+    '비 오는 날 출동은 소리가 달라. 발소리도, 마음 소리도.',
+    '이름 대신 코드네임으로 불리는 게 익숙해졌어. 가끔 본명이 낯설 정도로.',
+    '월급날만 기다리는 건 아니야. …반쯤은 맞지만.',
+    '쉬는 법을 배우는 게 훈련보다 어렵더라.',
   ],
 };

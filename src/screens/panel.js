@@ -15,7 +15,7 @@ export function mountPanel(root, ctx) {
   const go = (hash) => () => { Audio.sfx('select'); ctx.go(hash); };
   const row = (no, title, sub, hash, extra = '') => h('button', { class: `mod ${extra}`, type: 'button', onclick: go(hash) },
     h('span', { class: 'mod-no' }, no), h('span', { class: 'mod-body' }, h('b', {}, title), h('small', {}, sub)), h('span', { class: 'mod-go', html: icon('arrow', 22) }));
-  const reportRow = row('03', '오늘의 보고서 올리기', '하루를 마감하고 보고서를 제출합니다', '#/panel/report', 'report');
+  const reportRow = row('05', '오늘의 보고서 올리기', '하루를 마감하고 보고서를 제출합니다 · 연구 포인트 +1', '#/panel/report', 'report');
 
   const day = h('span', { class: 'bignum' }), clock = h('span', { class: 'clockline' }), funds = h('b'), rep = h('b'), injured = h('b'), away = h('b');
   const depBody = h('tbody');
@@ -23,10 +23,11 @@ export function mountPanel(root, ctx) {
   const paint = () => {
     const c = clockInfo(sim.clock);
     day.textContent = pad(sim.day);
-    clock.textContent = `${c.text} · ${c.phase} · ${sim.ended ? '하루 종료' : sim.speed === 0 ? '정지' : sim.speed === 1 ? '진행 1x' : '진행 2x'}`;
+    clock.textContent = `${c.text} · ${c.phase} · ${sim.ended ? '하루 종료' : sim.speed === 0 ? '정지' : `진행 ${sim.speed}x`}`;
     funds.textContent = fmtCredits(sim.funds); rep.textContent = String(sim.rep);
     injured.textContent = String(sim.units.filter((u) => u.hp < 25).length); away.textContent = String(sim.units.filter((u) => u.mode === 'mission').length);
     reportRow.classList.toggle('due', sim.ended);
+    const rsub = root.querySelector('.mods .mod:nth-child(4) small'); if (rsub) rsub.textContent = `연구 포인트 ${sim.research.points} 보유 · 능력 해금 · 3배속 · 수입 증가`;
     depBody.replaceChildren(...DEPTS.map((d) => {
       const m = sim.units.filter((u) => u.dept === d.key);
       const act = m.filter((u) => u.mode === 'mission' || u.mode === 'patrol').length, hp = Math.round(m.reduce((a, u) => a + u.hp, 0) / m.length);
@@ -46,6 +47,8 @@ export function mountPanel(root, ctx) {
         h('nav', { class: 'mods', 'aria-label': '주요 기능' },
           row('01', 'CCTV 캠', '기지 10개 채널 실시간 감시', '#/panel/cctv'),
           row('02', '현장 지휘', '지도 이동 · 방 배치 · 임무 · 순찰 · 대화 엿듣기', '#/panel/field'),
+          row('03', '커스터마이징', '머리·무기·스탯·특성 뽑기·능력', '#/panel/custom'),
+          row('04', '연구', '능력 해금 · 3배속 · 수입 증가', '#/panel/research'),
           reportRow)),
       h('aside', { class: 'hub-side' },
         h('dl', { class: 'kv' }, h('div', {}, h('dt', {}, '자금'), h('dd', {}, funds)), h('div', {}, h('dt', {}, '평판'), h('dd', {}, rep)), h('div', {}, h('dt', {}, '출동 중'), h('dd', {}, away)), h('div', {}, h('dt', {}, '부상자'), h('dd', {}, injured))),
