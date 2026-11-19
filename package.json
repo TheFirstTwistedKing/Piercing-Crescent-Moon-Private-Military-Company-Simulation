@@ -11,7 +11,7 @@
     "dev": "node scripts/build.mjs --watch --serve",
     "test:unit": "node scripts/test-core.mjs",
     "electron:dev": "npm run build:web && electron .",
-    "dist:win": "npm run build:web && electron-builder --win --x64",
+    "dist:win": "npm run build:web && electron-builder --win --x64 --publish never",
     "cap:android": "npm run build:web && (test -d android || npx cap add android) && node scripts/android-prepare.mjs && npx cap sync android"
   },
   "devDependencies": {
