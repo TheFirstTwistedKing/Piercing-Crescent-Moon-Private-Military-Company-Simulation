@@ -4,6 +4,7 @@ import { engine } from '../game/engine.js';
 import { DEPTS } from '../game/data.js';
 import { clockInfo, fmtCredits, DAY_REAL_SECONDS } from '../game/sim.js';
 import { h, icon, pad } from '../core/ui.js';
+import { openDeviceManager } from './device.js';
 
 export function mountPanel(root, ctx) {
   const sim = engine.sim;
@@ -37,7 +38,7 @@ export function mountPanel(root, ctx) {
 
   root.append(h('div', { class: 'panel screen' },
     h('header', { class: 'bar' }, h('img', { class: 'bar-mark', src: 'img/logo.png', alt: '' }), h('div', { class: 'bar-title' }, h('b', {}, '천공월아민간군사기업 관리 패널'), h('small', {}, 'PIERCING CRESCENT MOON PMC')), h('span', { class: 'grow' }),
-      h('span', { class: 'who' }, ctx.user.nick, h('small', {}, ctx.backendLabel)), snd, h('button', { class: 'icon-btn', type: 'button', 'aria-label': '로그아웃', title: '로그아웃', html: icon('logout', 20), onclick: () => ctx.logout() })),
+      h('span', { class: 'who' }, ctx.user.nick, h('small', {}, ctx.backendLabel)), snd, h('button', { class: 'icon-btn', type: 'button', 'aria-label': '등록된 기기', title: '등록된 기기', html: icon('device', 20), onclick: () => openDeviceManager(ctx) }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '로그아웃', title: '로그아웃', html: icon('logout', 20), onclick: () => ctx.logout() })),
     h('main', { class: 'hub' },
       h('section', { class: 'hub-main' },
         h('p', { class: 'eyebrow' }, 'DAY'), h('h1', { class: 'bigday' }, day), clock,

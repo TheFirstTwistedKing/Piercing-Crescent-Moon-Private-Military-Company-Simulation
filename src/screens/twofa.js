@@ -15,7 +15,7 @@ const codeInput = (id, label, { secret = false, hint } = {}) => {
   digitsOnly(input);
   return h('label', { class: 'f', for: id }, h('span', { class: 'f-label' }, label), input, hint && h('span', { class: 'f-hint' }, hint));
 };
-const frame = ({ kicker, title, sub, body, step }) => h('main', { class: 'auth screen twofa' },
+export const frame = ({ kicker, title, sub, body, step }) => h('main', { class: 'auth screen twofa' },
   h('section', { class: 'auth-aside' }, h('img', { class: 'auth-mark', src: 'img/logo.png', alt: '' }),
     step && h('ol', { class: 'steps' }, ...step.list.map((s, i) => h('li', { class: i === step.at ? 'on' : i < step.at ? 'done' : '' }, h('b', {}, String(i + 1).padStart(2, '0')), s)))),
   h('section', { class: 'auth-main' }, h('div', { class: 'auth-head' }, h('p', { class: 'eyebrow' }, kicker), h('h2', {}, title), h('p', { class: 'lede' }, sub)), body));
@@ -121,7 +121,7 @@ export function mountVerify(root, ctx) {
         const patch = {}; if (stepUsed != null) patch.lastStep = stepUsed;
         if (usedRecovery) patch.recovery = mfa.recovery.filter((x) => x !== usedRecovery);
         if (Object.keys(patch).length) await backend.updateProfile(uid, { mfa: patch }).catch(() => {});
-        Audio.sfx('confirm'); await ctx.verified(profile);
+        Audio.sfx('confirm'); await ctx.verified(profile, { viaRecovery: !!usedRecovery });
         if (usedRecovery) setTimeout(() => ctx.toast(`복구 코드를 사용했습니다. 남은 코드 ${patch.recovery.length}개`, 'alert'), 400);
         return;
       }

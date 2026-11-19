@@ -2,6 +2,7 @@
 import * as Audio from '../core/audio.js';
 import { backend } from '../core/backend.js';
 import { engine } from '../game/engine.js';
+import { assertHolder } from '../core/session.js';
 import { clockInfo, fmtCredits } from '../game/sim.js';
 import { DEPT } from '../game/data.js';
 import { h, icon, modal, pad } from '../core/ui.js';
@@ -44,7 +45,7 @@ export function mountReport(root, ctx) {
 
   const submit = () => modal({ title: '오늘의 보고서를 올릴까요?', body: '하루가 종료되고 진행 중인 임무·순찰은 즉시 정산됩니다. 되돌릴 수 없습니다.', actions: [{ label: '취소' }, { label: '제출', kind: 'primary', keep: true, onClick: async (close) => {
     try {
-      const rep = sim.buildReport(false); await backend.submitReport(ctx.user.uid, rep); sim.nextDay(rep); submitted = rep; await engine.save();
+      await assertHolder(); const rep = sim.buildReport(false); await backend.submitReport(ctx.user.uid, rep); sim.nextDay(rep); submitted = rep; await engine.save();
       Audio.sfx('report'); close(); paint(); loadPast();
     } catch (e) { Audio.sfx('error'); ctx.toast('제출 실패: ' + (e.userMessage || e.message), 'bad'); }
   } }] });

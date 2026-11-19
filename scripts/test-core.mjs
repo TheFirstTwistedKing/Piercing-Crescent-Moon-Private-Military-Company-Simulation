@@ -4,6 +4,7 @@ import { base32Encode, base32Decode, hotp, verifyTotp, totp, otpauthUri } from '
 import { hashSecret, verifySecret, makeRecoveryCodes, normalizeRecovery } from '../src/core/crypto.js';
 import { findPath, PATROLS, ROOMS, roomFreeTiles, roomDoorTile, isSolid, GATE, CAMERAS, MW, MH } from '../src/game/map.js';
 import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChance } from '../src/game/sim.js';
+import { nickKey, nickProblem } from '../src/core/nick.js';
 import { ROSTER, DEPTS, MISSIONS, MISSION } from '../src/game/data.js';
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
@@ -34,6 +35,11 @@ await t('PIN/복구코드 해시', async () => {
   assert.ok(await verifySecret('123456', rec)); assert.ok(!(await verifySecret('123457', rec)));
   const codes = makeRecoveryCodes(8); assert.equal(new Set(codes).size, 8); assert.match(codes[0], /^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   assert.equal(normalizeRecovery(codes[0].toLowerCase().replace('-', ' ')), codes[0]);
+});
+await t('콜사인: 정규화 키로 중복 판정, 규칙 검증', () => {
+  assert.equal(nickKey('Ab c'), nickKey('ab_C')); assert.equal(nickKey('한 서윤'), nickKey('한서윤')); assert.notEqual(nickKey('alpha1'), nickKey('alpha2'));
+  assert.equal(nickProblem('테스트요원'), ''); assert.equal(nickProblem('Ab_c-1'), '');
+  for (const bad of ['a', '가', 'x'.repeat(13), 'a/b', '<b>', 'Admin', '관리자', ' ', '__', '😀😀']) assert.notEqual(nickProblem(bad), '', bad);
 });
 await t('로스터/부서 구성', () => {
   assert.equal(DEPTS.length, 8); assert.equal(ROSTER.length, 24);

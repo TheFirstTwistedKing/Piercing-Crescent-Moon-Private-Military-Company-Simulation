@@ -7,6 +7,9 @@ Piercing Crescent Moon Private Military Company Management Panel
 - **인트로**: 검은 화면에서 오른쪽→왼쪽으로 스캔되며 로고가 드러나고 제목·부제가 해독됩니다. 전력 활성화 효과음이 스캔과 동기화됩니다. 다시보기 버튼은 없고, 앱을 나갔다 들어오면(새로 실행) 다시 재생됩니다.
 - **로그인 / 회원가입**: 별도 화면. Firebase Authentication(이메일+비밀번호), 계정별 데이터는 Firestore.
 - **2차 보안**: 인증 앱(TOTP) + 6자리 PIN, 복구 코드 8개(1회용). 접속할 때마다 확인합니다.
+- **콜사인 중복 금지**: 같은 이름(대소문자·공백·`_`·`-` 차이는 같은 이름으로 봄)으로는 가입할 수 없습니다. Firestore `nicks/` 문서 + 보안 규칙으로 동시 가입 경쟁도 막습니다.
+- **기기 등록**: 처음 쓰는 기기는 이미 등록된 기기에서 확인 코드를 대조해 승인해야 로그인됩니다(최대 5대, 복구 코드로도 등록 가능). 패널 상단의 기기 버튼에서 목록 확인/삭제.
+- **동시 접속 1곳**: 다른 곳에서 로그인하면 기존 접속은 10초 안에 종료됩니다(저장 직전에도 확인해 데이터를 덮어쓰지 않음).
 - **메인 패널**: CCTV 캠 / 현장 지휘 / 오늘의 보고서 올리기. 사운드 끄기는 이 화면에만 있습니다.
 - **CCTV 캠**: 기지 10개 채널(부서 방 8 + 복도 + 정문), 확대 보기.
 - **현장 지휘(쯔꾸르 스타일)**: 화면 이동(드래그/WASD/핀치), 캐릭터를 눌러 *방으로 보내기 · 임무 보내기 · 순찰 보내기 · 대화 엿듣기*(혼잣말).
@@ -16,7 +19,7 @@ Piercing Crescent Moon Private Military Company Management Panel
 ## 1. Firebase 설정 (필수 — 다른 사람도 다른 계정으로 로그인하려면)
 1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트 생성 → **웹 앱 추가** → `firebaseConfig` 복사.
 2. **Authentication → 로그인 방법 → 이메일/비밀번호** 사용 설정.
-3. **Firestore Database** 생성(프로덕션 모드) 후 이 저장소의 `firestore.rules` 내용을 규칙에 붙여넣고 게시 (`firebase deploy --only firestore:rules` 도 가능).
+3. **Firestore Database** 생성(프로덕션 모드) 후 이 저장소의 `firestore.rules` 내용을 규칙에 붙여넣고 게시 (**콜사인 중복 방지용 `nicks` 규칙 포함 — 반드시 게시**) (`firebase deploy --only firestore:rules` 도 가능).
 4. `src/config/firebase-config.js` 의 `placeholder` 값을 복사한 값으로 교체하고 커밋. 또는 GitHub 저장소 *Settings → Secrets → Actions* 에 `FIREBASE_CONFIG_JSON`(firebaseConfig 를 JSON 한 줄로)을 등록하면 CI 빌드에 주입됩니다.
 5. API 키에 **HTTP 리퍼러 제한을 걸었다면** exe(`file://`)·apk(`https://localhost`)에서 막힐 수 있으니 제한 없이 두거나 Firebase 콘솔에서 허용 도메인을 확인하세요.
 
@@ -24,6 +27,7 @@ Piercing Crescent Moon Private Military Company Management Panel
 
 ## 2. 2차 보안에 대한 정직한 설명
 검증이 앱(클라이언트) 안에서 이뤄지고 TOTP 비밀값·PIN 해시가 사용자 본인의 Firestore 문서에 저장됩니다. 따라서 **비밀번호를 알고 Firestore 를 직접 읽을 수 있는 공격자**에게는 우회될 수 있습니다. 자리를 비운 사이의 접근, 비밀번호만 유출된 상황 등을 막는 용도이며, 강한 보안이 필요하면 Firebase Identity Platform 공식 MFA 로 전환하세요.
+- 기기 등록·동시 접속 제한도 같은 한계가 있습니다(앱 안에서 검사). 비밀번호가 유출되거나 계정을 여럿이 같이 쓰는 상황을 막는 용도입니다.
 - 인증 앱을 잃었을 때: 복구 코드 사용. 모두 잃으면 Firebase 콘솔에서 `users/{uid}` 문서의 `mfa` 필드를 삭제하면 다음 로그인 때 재설정됩니다.
 - 5회 연속 실패 시 30초부터 잠금(장치 단위).
 
