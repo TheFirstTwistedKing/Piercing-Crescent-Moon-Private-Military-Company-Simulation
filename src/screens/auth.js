@@ -51,7 +51,7 @@ export function mountLogin(root, ctx) {
     try { await ctx.signedIn(await backend.signIn({ email, password })); Audio.sfx('confirm'); }
     catch (ex) { err.textContent = koError(ex); Audio.sfx('error'); submit.disabled = false; submit.textContent = '접속'; }
   });
-  root.append(shell({ kicker: 'ACCESS / 01', title: '로그인', sub: '관리 패널에 접속합니다. 로그인 후 2차 보안 확인이 한 번 더 진행됩니다.', form }));
+  root.append(shell({ kicker: 'ACCESS / 01', title: '로그인', sub: '관리 패널에 접속합니다. 로그인 후 보안 PIN 확인이 한 번 더 진행됩니다.', form }));
   setTimeout(() => form.email.focus(), 60);
 }
 
@@ -80,7 +80,7 @@ export function mountSignup(root, ctx) {
     if (p) { nickHint.textContent = p; nickHint.style.color = 'var(--red)'; return; }
     try { const ok = await backend.nickAvailable(v); if (mine !== nickSeq) return; nickHint.textContent = ok ? '사용할 수 있는 콜사인입니다.' : '이미 사용 중인 콜사인입니다.'; nickHint.style.color = ok ? 'var(--green)' : 'var(--red)'; } catch { /* 확인 실패 시 가입 단계에서 다시 검사 */ }
   });
-  root.append(shell({ kicker: 'ACCESS / 02', title: '회원가입', sub: '계정을 만들면 이어서 2차 보안(인증 앱 + PIN)을 설정합니다.', form }));
+  root.append(shell({ kicker: 'ACCESS / 02', title: '회원가입', sub: '계정을 만들면 이어서 2차 보안(6자리 PIN)을 설정합니다.', form }));
   setTimeout(() => form.nick.focus(), 60);
 }
 export { esc };

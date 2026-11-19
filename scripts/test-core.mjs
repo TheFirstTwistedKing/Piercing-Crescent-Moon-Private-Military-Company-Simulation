@@ -1,6 +1,5 @@
 // Node 에서 실행되는 코어 테스트: TOTP(RFC 6238 벡터), 해시, 맵 연결성, 시뮬레이션 규칙(시간 12분, 임무/순찰/보고서/저장복원).
 import assert from 'node:assert/strict';
-import { base32Encode, base32Decode, hotp, verifyTotp, totp, otpauthUri } from '../src/core/totp.js';
 import { hashSecret, verifySecret, makeRecoveryCodes, normalizeRecovery } from '../src/core/crypto.js';
 import { findPath, PATROLS, ROOMS, roomFreeTiles, roomDoorTile, isSolid, GATE, CAMERAS, MW, MH } from '../src/game/map.js';
 import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChance } from '../src/game/sim.js';
@@ -9,27 +8,6 @@ import { ROSTER, DEPTS, MISSIONS, MISSION } from '../src/game/data.js';
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
 
-await t('base32 왕복', () => { const b = new Uint8Array([1, 2, 3, 250, 99, 0, 7]); assert.deepEqual([...base32Decode(base32Encode(b))], [...b]); });
-await t('TOTP — RFC 6238 SHA1 벡터 (secret="12345678901234567890")', async () => {
-  const key = new TextEncoder().encode('12345678901234567890');
-  // RFC 6238 부록 B: T=59 → 94287082(8자리) ⇒ 6자리 287082, T=1111111109 → 07081804 ⇒ 081804, T=1234567890 → 89005924 ⇒ 005924
-  assert.equal(await hotp(key, Math.floor(59 / 30)), '287082');
-  assert.equal(await hotp(key, Math.floor(1111111109 / 30)), '081804');
-  assert.equal(await hotp(key, Math.floor(1234567890 / 30)), '005924');
-  assert.equal(await hotp(key, Math.floor(59 / 30), 8), '94287082');
-});
-await t('TOTP verify: 허용 창/재사용 방지/형식 오류', async () => {
-  const secret = base32Encode(new TextEncoder().encode('12345678901234567890'));
-  const T = 1111111109 * 1000;
-  const step = await verifyTotp(secret, '081804', { time: T });
-  assert.equal(step, Math.floor(1111111109 / 30));
-  assert.equal(await verifyTotp(secret, '081804', { time: T, minStep: step }), null, '같은 스텝 재사용 거부');
-  assert.equal(await verifyTotp(secret, '081804', { time: T + 30000 }), step, '±1 스텝 허용');
-  assert.equal(await verifyTotp(secret, '081804', { time: T + 95000 }), null, '창 밖 거부');
-  assert.equal(await verifyTotp(secret, '12ab56', { time: T }), null);
-  assert.match(otpauthUri({ secret, account: 'a@b.c', issuer: 'X' }), /^otpauth:\/\/totp\/X%3Aa%40b\.c\?secret=/);
-  assert.match(await totp(secret), /^\d{6}$/);
-});
 await t('PIN/복구코드 해시', async () => {
   const rec = await hashSecret('123456', 1000);
   assert.ok(await verifySecret('123456', rec)); assert.ok(!(await verifySecret('123457', rec)));
