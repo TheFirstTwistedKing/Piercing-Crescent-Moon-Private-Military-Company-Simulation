@@ -44,6 +44,7 @@ const FURN = {
   raider: [['locker', 0, 2, 1, 4, 1], ['locker', 9, 2, 1, 4, 1], ['maptable', 3, 4, 4, 2, 1], ['rack', 2, 8, 6, 1, 1]],
   defencer: [['barricade', 1, 3, 3, 1, 1], ['barricade', 6, 3, 3, 1, 1], ['monitors', 3, 7, 4, 1, 1], ['chair', 4, 8, 1, 1, 0], ['shieldrack', 0, 6, 1, 2, 1], ['crate', 9, 7, 1, 1, 1]],
   carrier: [['truck', 1, 2, 4, 2, 1], ['van', 6, 5, 3, 2, 1], ['crate', 7, 1, 2, 2, 1], ['pallet', 0, 7, 3, 1, 1]],
+  yard: [['furnace', 53, 9, 2, 2, 1]],
   lobby: [['sofa', 25, 15, 5, 1, 1], ['vending', 32, 15, 1, 1, 1], ['plant', 6, 15, 1, 1, 1], ['plant', 49, 15, 1, 1, 1], ['plant', 6, 20, 1, 1, 1], ['plant', 49, 20, 1, 1, 1], ['board', 14, 15, 3, 1, 1], ['board', 38, 15, 3, 1, 1]],
 };
 
@@ -101,9 +102,9 @@ export const isSolid = (x, y) => !inBounds(x, y) || solid[idx(x, y)] === 1;
   }
   // 가구
   for (const [room, list] of Object.entries(FURN)) {
-    const r = ROOMS[room];
+    const r = ROOMS[room], abs = room === 'lobby' || room === 'yard';
     for (const [type, c, ro, w, h, sol] of list) {
-      const ox = room === 'lobby' ? c : r.ix + c, oy = room === 'lobby' ? ro : r.iy + ro;
+      const ox = abs ? c : r.ix + c, oy = abs ? ro : r.iy + ro;
       objects.push({ type, x: ox, y: oy, w, h, solid: !!sol, room });
       if (sol) for (let yy = oy; yy < oy + h; yy++) for (let xx = ox; xx < ox + w; xx++) solid[idx(xx, yy)] = 1;
     }
@@ -128,7 +129,7 @@ function reachable() {
 }
 
 // 방 안 서성일 수 있는 타일(문 앞 2줄은 비워 통로 확보)
-export function roomFreeTiles(roomKey) {
+function roomFreeTilesRaw(roomKey) {
   const out = [];
   const rc = reachable();
   if (roomKey === 'lobby') {
@@ -142,11 +143,48 @@ export function roomFreeTiles(roomKey) {
   }
   return out;
 }
+export const roomFreeTiles = (roomKey) => roomFreeTilesRaw(roomKey).filter(([x, y]) => !SLOT_SET.has(idx(x, y)));
 export const roomDoorTile = (roomKey) => {
   if (roomKey === 'lobby') return [28, 17];
   const r = ROOMS[roomKey];
   return [r.doorX, r.top ? r.doorY + 1 : r.doorY - 1]; // 복도 쪽 문 앞
 };
+
+/* ───── 가구 자리(방마다 4칸) ─────
+   문에서 먼 칸부터 고르되, 4칸을 모두 채워도 정문까지 길이 끊기지 않는 칸만 쓴다. 가구를 놓을 때만 solid 가 된다. */
+export const FURN_SLOT_COUNT = 4;
+export const SLOTS = {};
+const SLOT_SET = new Set();
+function reachCount() {
+  const seen = new Uint8Array(MW * MH), st = [[GATE.x, GATE.y]]; seen[idx(GATE.x, GATE.y)] = 1; let n = 1;
+  while (st.length) { const [x, y] = st.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!inBounds(nx, ny) || seen[idx(nx, ny)] || isSolid(nx, ny)) continue; seen[idx(nx, ny)] = 1; n++; st.push([nx, ny]); } }
+  return n;
+}
+(function computeSlots() {
+  const keys = [...Object.keys(ROOMS), 'lobby'], base = reachCount(); let placed = 0; const all = [];
+  for (const k of keys) {
+    const door = roomDoorTile(k), chosen = [];
+    const cand = roomFreeTilesRaw(k).sort((a, b) => (Math.abs(b[0] - door[0]) + Math.abs(b[1] - door[1])) - (Math.abs(a[0] - door[0]) + Math.abs(a[1] - door[1])));
+    for (const [x, y] of cand) {
+      if (chosen.length >= FURN_SLOT_COUNT) break;
+      if (chosen.some(([a, b]) => Math.abs(a - x) + Math.abs(b - y) < 3)) continue;
+      solid[idx(x, y)] = 1;
+      if (reachCount() === base - placed - 1) { chosen.push([x, y]); placed++; all.push([x, y]); } else solid[idx(x, y)] = 0;
+    }
+    SLOTS[k] = chosen;
+  }
+  for (const [x, y] of all) { solid[idx(x, y)] = 0; SLOT_SET.add(idx(x, y)); }
+})();
+export const setSlotSolid = (room, i, on) => { const t = SLOTS[room]?.[i]; if (t) solid[idx(t[0], t[1])] = on ? 1 : 0; };
+
+/* ───── 야외 / 용광로 ───── */
+export const isOutdoor = (x, y) => inBounds(x, y) && (floorKind[idx(x, y)] === 0 || floorKind[idx(x, y)] === 4);
+export const FURNACE = { x: 53, y: 9, w: 2, h: 2, spot: [52, 10] };   // 작업자는 서쪽 칸에 선다
+export function yardWorkTiles() {   // 재설 작업을 할 마당 타일(정문에서 걸어갈 수 있는 곳, 길가 제외)
+  const rc = reachable(), out = [];
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (floorKind[idx(x, y)] === 0 && rc[idx(x, y)] && !solid[idx(x, y)] && !(x === 52 && y >= 8 && y <= 11)) out.push([x, y]);
+  return out;
+}
 
 /* ───── 경로 탐색 (A*, 4방향) ───── */
 export function findPath(sx, sy, tx, ty) {
@@ -278,6 +316,11 @@ function drawObject(c, o) {
     case 'truck': R(c, '#241c14', x, y + 2, w, h - 4); R(c, '#6b4a2c', x + 22, y + 4, w - 24, h - 8); R(c, '#8a6038', x + 22, y + 4, w - 24, 2); R(c, '#4a3a28', x + 2, y + 5, 18, h - 10); R(c, '#0b1a22', x + 4, y + 8, 6, h - 16); R(c, '#111', x + 6, y, 8, 3); R(c, '#111', x + 6, y + h - 3, 8, 3); R(c, '#111', x + 40, y, 8, 3); R(c, '#111', x + 40, y + h - 3, 8, 3); break;
     case 'van': R(c, '#1f1f1f', x, y + 2, w, h - 4); R(c, '#3d4a55', x + 2, y + 4, w - 4, h - 8); R(c, '#0b1a22', x + w - 12, y + 8, 8, h - 16); R(c, '#5d6d7a', x + 2, y + 4, w - 4, 2); break;
     case 'pallet': R(c, '#3a2a16', x, y + 3, w, 11); for (let i = 0; i < o.w; i++) { R(c, '#5b4326', x + i * TS + 1, y + 1, 14, 9); R(c, '#7a5a34', x + i * TS + 1, y + 1, 14, 2); } break;
+    case 'furnace': {
+      R(c, '#2a2623', x, y + 2, w, h - 2); R(c, '#4a443e', x + 1, y + 3, w - 2, h - 5); R(c, '#6a635a', x + 1, y + 3, w - 2, 2);
+      R(c, '#15110f', x + 7, y + 14, 14, 11); R(c, '#3a1a0c', x + 8, y + 15, 12, 9); R(c, '#2a2623', x + 4, y - 6, 6, 10); R(c, '#4a443e', x + 4, y - 6, 6, 2); // 굴뚝
+      break;
+    }
     case 'sofa': R(c, '#2e1c1c', x, y + 2, w, 13); R(c, '#4d2f2f', x + 2, y + 5, w - 4, 8); for (let i = 1; i < o.w; i++) R(c, '#2e1c1c', x + i * TS, y + 5, 1, 8); break;
     case 'vending': R(c, '#1c2229', x + 1, y, 14, 16); R(c, '#0d2a33', x + 3, y + 2, 10, 8); R(c, '#6f95a8', x + 4, y + 3, 8, 1); R(c, '#c9a24a', x + 4, y + 12, 8, 2); break;
     default: break;

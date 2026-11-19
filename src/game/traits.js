@@ -102,6 +102,9 @@ export function fxLines(fx) {
     else if (k === 'mor') out.push({ t: `사기 변화 ${sg(v)}`, good: v > 0 });
     else if (k === 'patrolSafe') out.push({ t: '순찰 중 부상 없음', good: true });
     else if (k === 'copycat') out.push({ t: '동료 최고 스탯의 70% 복사', good: true });
+    else if (k === 'rest') out.push({ t: `하루 종료 시 사기 ${sg(v)}`, good: v > 0 });
+    else if (k === 'coldProof') out.push({ t: '한파 이동 속도 감소 무시', good: true });
+    else if (k === 'fogProof') out.push({ t: '안개 성공률 감소 무시', good: true });
   }
   return out;
 }

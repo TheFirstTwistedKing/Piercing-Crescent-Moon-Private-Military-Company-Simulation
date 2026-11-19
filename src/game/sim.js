@@ -1,6 +1,9 @@
 // 시뮬레이션 코어. 렌더/DOM 과 완전히 분리되어 Node 에서도 테스트된다.
 import { ROSTER, DEPT, DEPTS, MISSION, PATROL_META, PATROL_EVENTS, MONO, ROOM_LABEL } from './data.js';
-import { TS, GATE, PATROLS, roomFreeTiles, findPath, ROOMS } from './map.js';
+import { TS, GATE, PATROLS, roomFreeTiles, findPath, ROOMS, setSlotSolid, SLOTS, isOutdoor, FURNACE, yardWorkTiles } from './map.js';
+import { WEATHERS, rollWeather, dailySnow, START_SNOW, SNOW_SLOW, TASKS } from './weather.js';
+import { ITEM, STAT_ITEM_CAP, FURN_SLOTS, ROOM_KEYS } from './shop.js';
+import { LEADER_IDS, LEADER_SET, LEADER_TALK, AFF_MAX, REQUEST_COST } from './leaders.js';
 import { WEAPON } from './weapons.js';
 import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
 import { HAIR } from './hair.js';
@@ -23,11 +26,12 @@ export function clockInfo(clock) {
 }
 export const fmtCredits = (n) => `${n < 0 ? '-' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')} CR`;
 
-export function successChance(u, m, night = false) {
+export function successChance(u, m, night = false, extra = 0) {
   const stat = u.dv ? u.dv[m.stat] : u.stats[m.stat];
   const same = u.dept === m.dept;
   let p = 0.9 - m.risk * 0.95 + (stat - 55) / 220 + (u.mor - 50) / 400 + (same ? 0.07 : -0.13);
   if (u.fx) p += u.fx.succ + (night ? u.fx.night : u.fx.day) + (u.cs?.cha || 0) * 0.004;
+  p += extra;
   if (u.hp < 50) p -= (50 - u.hp) / 250;
   return Math.max(0.05, Math.min(0.97, p));
 }
@@ -38,9 +42,11 @@ class Unit {
     // 커스터마이징: 포인트 풀(40~50 랜덤), 배분, 특성 뽑기, 장착
     this.pool = randomPool(rand); this.alloc = autoAlloc(this.pool, base.dept);
     this.used = 0; this.traits = []; this.eq = []; this.ab = []; this.baseName = base.name; this.baseLatin = base.latin;
+    this.gear = { armor: null, acc: null }; this.bonus = emptyAlloc(); this.kit = false; this.warm = 0;   // 장비 · 아이템 스탯 보너스 · 임무 지원 키트 · 방한 팩(일자)
+    this.isLeader = LEADER_SET.has(base.id); this.aff = 0; this.talked = 0; this.asked = 0; this.work = null; this.aura = 0;
     this.hp = 100; this.mor = 60;
     this.home = base.dept === 'operation' ? 'operation' : base.dept; // 부서 방 = 부서 key
-    this.mode = 'idle';          // idle | goto | mission | patrol
+    this.mode = 'idle';          // idle | goto | mission | patrol | work
     this.phase = null;           // mission: out | away | back
     this.mission = null; this.patrol = null;
     this.path = []; this.moving = false; this.dir = 'down'; this.anim = 0;
@@ -57,8 +63,11 @@ export class Sim {
     this.byId = Object.fromEntries(this.units.map((u) => [u.id, u]));
     this.day = 1; this.clock = 0; this.funds = START_FUNDS; this.rep = 0; this.speed = 0; this.ended = false;
     this.research = freshResearch();
+    this.weather = { today: rollWeather(rand), next: rollWeather(rand) }; this.snow = START_SNOW;
+    this.inv = {}; this.placed = Object.fromEntries(ROOM_KEYS.map((k) => [k, Array(FURN_SLOTS).fill(null)]));
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
     this.listeners = {}; this.dirty = false;
+    this.syncSlots();
     for (const u of this.units) { const s = this.spot(u.home); u.place(s[0], s[1]); }
     this.refresh();
     if (saved) this.restore(saved);
@@ -78,12 +87,34 @@ export class Sim {
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
 
   /* ── 커스터마이징 / 연구 ── */
-  chance(u, m) { return successChance(u, m, this.clock >= DAY_PHASE_MIN); }
+  weatherFx() { return WEATHERS[this.weather.today]; }
+  /** 날씨·아이템 효과로 인한 임무 성공률 보정 (안개 -10%, 안개 고글이면 무시, 임무 지원 키트 +10%) */
+  succBonus(u) { const w = this.weatherFx(); return (w.succ && !u.fx.fogProof ? w.succ : 0) + (u.kit ? 0.1 : 0); }
+  chance(u, m) { return successChance(u, m, this.clock >= DAY_PHASE_MIN, this.succBonus(u)); }
   incomeMult() { return 1 + 0.005 * this.research.income; }
   pullsLeft(u) { return 10 + this.research.pulls - u.used; }
-  /** 효과 합산·파생 능력치 갱신 (카피캣은 같은 부서 동료 값에 의존하므로 2단계) */
+  /** 방에 놓인 가구의 효과(그 방을 거처로 쓰는 인원 모두에게 적용). 선호 방이면 ×1.5. 유지비는 가구 단위로 따로 센다. */
+  roomFx(room) {
+    const out = {};
+    for (const id of this.placed[room] || []) {
+      if (!id) continue; const f = ITEM[id], mul = f.fav.includes(room) ? 1.5 : 1;
+      for (const [k, v] of Object.entries(f.fx)) { if (k === 'upkeep') continue; out[k] = typeof v === 'boolean' ? v : (out[k] || 0) + v * mul; }
+    }
+    return out;
+  }
+  furnitureUpkeep() { let t = 0; for (const room of Object.keys(this.placed)) for (const id of this.placed[room]) if (id) t += ITEM[id].fx.upkeep || 0; return t; }
+  syncSlots() { for (const room of ROOM_KEYS) for (let i = 0; i < FURN_SLOTS; i++) setSlotSolid(room, i, !!this.placed[room]?.[i]); }
+  leaderUnit(dept) { return this.byId[LEADER_IDS[dept]]; }
+
+  /** 효과 합산·파생 능력치 갱신 (팀장 감화, 카피캣은 다른 인원 값에 의존하므로 단계별로 계산) */
   refresh() {
-    for (const u of this.units) { u.fx = sumFx(u); u.csBase = Object.fromEntries(CSTATS.map(({ k }) => [k, clampStat(u.alloc[k] + u.fx[k])])); }
+    const rooms = {};
+    for (const u of this.units) {
+      u.fx = sumFx(u, [ITEM[u.gear.armor]?.fx, ITEM[u.gear.acc]?.fx, (rooms[u.home] ||= this.roomFx(u.home))]); u.aura = 0;
+      u.csBase = Object.fromEntries(CSTATS.map(({ k }) => [k, clampStat(u.alloc[k] + u.bonus[k] + u.fx[k])]));
+    }
+    // 팀장 감화: 같은 부서 팀원의 임무 성공률 +(카리스마 × 0.4% + 친밀도 × 0.3%)
+    for (const d of DEPTS) { const L = this.leaderUnit(d.key); const aura = 0.004 * L.csBase.cha + 0.003 * L.aff; for (const u of this.units) if (u.dept === d.key && u !== L) { u.fx.succ += aura; u.aura = aura; } }
     for (const u of this.units) {
       u.cs = { ...u.csBase };
       if (u.fx.copycat) for (const { k } of CSTATS) { const best = Math.max(0, ...this.units.filter((m) => m !== u && m.dept === u.dept).map((m) => m.csBase[k])); u.cs[k] = Math.max(u.cs[k], Math.round(best * 0.7)); }
@@ -91,6 +122,99 @@ export class Sim {
     }
     this.dirty = true; this.emit('custom');
   }
+
+  /* ── 상점 / 인벤토리 ── */
+  owned(id) { return this.inv[id] || 0; }
+  buy(id, n = 1) {
+    const it = ITEM[id]; if (!it) return { ok: false, reason: '없는 품목' };
+    const cost = it.price * n; if (this.funds < cost) return { ok: false, reason: `자금이 부족합니다. (필요 ${cost.toLocaleString('ko-KR')} CR)` };
+    this.funds -= cost; this.inv[id] = this.owned(id) + n; this.dirty = true; this.emit('custom'); return { ok: true };
+  }
+  useStatItem(uid, id) {
+    const u = this.byId[uid], it = ITEM[id];
+    if (!it || it.cat !== 'stat' || this.owned(id) < 1) return { ok: false, reason: '보유하지 않은 아이템' };
+    if (u.bonus[it.stat] >= STAT_ITEM_CAP) return { ok: false, reason: `이 스탯은 아이템으로 최대 +${STAT_ITEM_CAP} 까지입니다.` };
+    this.inv[id]--; u.bonus[it.stat]++; this.refresh(); return { ok: true };
+  }
+  equipGear(uid, id) {
+    const u = this.byId[uid], it = ITEM[id];
+    if (!it || it.cat !== 'equip' || this.owned(id) < 1) return { ok: false, reason: '보유하지 않은 장비' };
+    const old = u.gear[it.slot]; if (old) this.inv[old] = this.owned(old) + 1;
+    this.inv[id]--; u.gear[it.slot] = id; this.refresh(); return { ok: true };
+  }
+  unequipGear(uid, slot) {
+    const u = this.byId[uid], id = u.gear[slot]; if (!id) return { ok: false, reason: '장착한 장비가 없습니다.' };
+    this.inv[id] = this.owned(id) + 1; u.gear[slot] = null; this.refresh(); return { ok: true };
+  }
+  useConsumable(uid, id) {
+    const u = this.byId[uid], it = ITEM[id];
+    if (!it || it.cat !== 'consume' || this.owned(id) < 1) return { ok: false, reason: '보유하지 않은 소모품' };
+    const e = it.use;
+    if (e.hp && u.hp >= 100) return { ok: false, reason: '이미 HP가 가득합니다.' };
+    if (e.mor && u.mor >= 100) return { ok: false, reason: '이미 사기가 가득합니다.' };
+    if (e.kit && u.kit) return { ok: false, reason: '이미 임무 지원 키트가 적용돼 있습니다.' };
+    if (e.warm && u.warm === this.day) return { ok: false, reason: '오늘은 이미 방한 팩을 썼습니다.' };
+    this.inv[id]--;
+    if (e.hp) u.hp = Math.min(100, u.hp + e.hp); if (e.mor) u.mor = Math.min(100, u.mor + e.mor); if (e.kit) u.kit = true; if (e.warm) u.warm = this.day;
+    this.refresh(); return { ok: true };
+  }
+  placeFurniture(room, slot, id) {
+    const it = ITEM[id]; if (!it || it.cat !== 'furniture' || !this.placed[room] || !(slot >= 0 && slot < FURN_SLOTS)) return { ok: false, reason: '배치할 수 없습니다.' };
+    if (this.owned(id) < 1) return { ok: false, reason: '보유하지 않은 가구' }; if (this.placed[room][slot]) return { ok: false, reason: '이미 가구가 놓인 자리입니다.' };
+    this.inv[id]--; this.placed[room][slot] = id; setSlotSolid(room, slot, true); this.refresh(); return { ok: true };
+  }
+  removeFurniture(room, slot) {
+    const id = this.placed[room]?.[slot]; if (!id) return { ok: false, reason: '비어 있는 자리입니다.' };
+    this.inv[id] = this.owned(id) + 1; this.placed[room][slot] = null; setSlotSolid(room, slot, false); this.refresh(); return { ok: true };
+  }
+
+  /* ── 팀장 ── */
+  /** topic: report(보고 듣기) | encourage(격려, 하루 1회) | request(지원 요청 2,000 CR, 하루 1회) */
+  talkLeader(dept, topic) {
+    const L = this.leaderUnit(dept); if (!L) return { ok: false, reason: '팀장을 찾을 수 없습니다.' };
+    const pool = LEADER_TALK[L.id], pick = (a) => a[Math.floor(this.rand() * a.length)];
+    const members = this.units.filter((u) => u.dept === dept);
+    const avg = (f) => Math.round(members.reduce((a, u) => a + f(u), 0) / members.length);
+    if (topic === 'report') {
+      const ms = this.dayLog.missions.filter((m) => m.dept === dept).length, w = this.weatherFx();
+      const lines = [pick(pool.report), `부서원 ${members.length}명 · 평균 HP ${avg((u) => u.hp)} · 평균 사기 ${avg((u) => u.mor)} · 오늘 임무 ${ms}건.`];
+      if (w.speed) lines.push('혹한이라 이동이 더딥니다.'); else if (w.succ) lines.push('안개가 짙어 작전이 불안합니다.');
+      return { ok: true, lines, effects: [] };
+    }
+    if (topic === 'encourage') {
+      if (L.talked === this.day) return { ok: false, reason: '오늘은 이미 격려했습니다.' };
+      L.talked = this.day; members.forEach((u) => { u.mor = Math.min(100, u.mor + 8); }); L.aff = Math.min(AFF_MAX, L.aff + 1); this.refresh();
+      return { ok: true, lines: [pick(pool.encourage)], effects: ['부서 사기 +8', '팀장 친밀도 +1'] };
+    }
+    if (topic === 'request') {
+      if (L.asked === this.day) return { ok: false, reason: '오늘은 이미 지원을 요청받았습니다.' };
+      if (this.funds < REQUEST_COST) return { ok: false, reason: `자금이 부족합니다. (필요 ${REQUEST_COST.toLocaleString('ko-KR')} CR)` };
+      L.asked = this.day; this.funds -= REQUEST_COST; members.forEach((u) => { u.mor = Math.min(100, u.mor + 15); u.hp = Math.min(100, u.hp + 10); }); L.aff = Math.min(AFF_MAX, L.aff + 1); this.refresh();
+      return { ok: true, lines: [pick(pool.request)], effects: [`-${REQUEST_COST.toLocaleString('ko-KR')} CR`, '부서 사기 +15 · HP +10', '팀장 친밀도 +1'] };
+    }
+    return { ok: false, reason: '알 수 없는 대화' };
+  }
+
+  /* ── 야외 작업(재설 / 용광로 발전) ── */
+  get furnaceActive() { return this.units.some((u) => u.mode === 'work' && u.work?.kind === 'furnace' && u.work.started); }
+  sendWork(id, kind) {
+    const u = this.byId[id], T = TASKS[kind], c = this.canCommand(u);
+    if (!c.ok) return c; if (!T) return { ok: false, reason: '알 수 없는 작업' };
+    if (this.isInjured(u)) return { ok: false, reason: '부상이 심해 작업할 수 없습니다. (HP 25 미만)' };
+    if (kind === 'furnace' && this.units.some((x) => x !== u && x.mode === 'work' && x.work?.kind === 'furnace')) return { ok: false, reason: '이미 용광로를 가동 중인 인원이 있습니다.' };
+    if (kind === 'snow' && this.snow <= 0) return { ok: false, reason: '치울 눈이 없습니다.' };
+    const tiles = kind === 'furnace' ? [FURNACE.spot] : yardWorkTiles(); const spot = tiles[Math.floor(this.rand() * tiles.length)];
+    const path = findPath(u.tx, u.ty, spot[0], spot[1]); if (!path) return { ok: false, reason: '작업 장소로 갈 수 없습니다.' };
+    if (u.mode === 'patrol') u.patrol = null;
+    u.mode = 'work'; u.work = { kind, remaining: T.dur, total: T.dur, started: false }; u.path = path; this.dayLog.orders++;
+    this.note(`${u.name} ${T.ko} 시작`, 'order', false); return { ok: true };
+  }
+  finishWork(u) {
+    const T = TASKS[u.work.kind]; this.note(`${u.name} ${T.ko} 완료 — 적설 ${Math.round(this.snow)}%`, 'good', false);
+    u.work = null; u.mode = 'idle'; this.sendToRoom(u.id, u.home, true);
+  }
+
+  /* ── 커스터마이징 ── */
   setHair(id, style, color) {
     const u = this.byId[id]; if (!HAIR[style]) return { ok: false, reason: '없는 스타일' };
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, reason: '색 형식 오류' };
@@ -174,6 +298,7 @@ export class Sim {
     if (u.mode === 'mission') return c;
     if (!ROOM_LABEL[room]) return { ok: false, reason: '알 수 없는 방' };
     if (u.mode === 'patrol') { u.patrol = null; this.note(`${u.name} — 순찰 중단, ${ROOM_LABEL[room]} 으로 이동`, 'info', false); }
+    if (u.mode === 'work') { u.work = null; }
     const s = this.spot(room);
     const path = findPath(u.tx, u.ty, s[0], s[1]);
     if (!path) return { ok: false, reason: '길을 찾을 수 없습니다.' };
@@ -186,7 +311,7 @@ export class Sim {
     const u = this.byId[id]; const m = MISSION[missionId]; const c = this.canCommand(u);
     if (!c.ok) return c;
     if (this.isInjured(u)) return { ok: false, reason: '부상이 심해 임무에 나설 수 없습니다. (HP 25 미만)' };
-    if (u.mode === 'patrol') u.patrol = null;
+    if (u.mode === 'patrol') u.patrol = null; if (u.mode === 'work') u.work = null;
     const path = findPath(u.tx, u.ty, GATE.x, GATE.y);
     if (!path) return { ok: false, reason: '정문까지의 길을 찾을 수 없습니다.' };
     u.mode = 'mission'; u.phase = 'out'; u.path = path; u.mission = { id: m.id, remaining: m.dur, total: m.dur };
@@ -236,6 +361,7 @@ export class Sim {
       return `임무 ${u.phase === 'out' ? '출발' : '복귀'} 중 · ${m.name}`;
     }
     if (u.mode === 'patrol') return `순찰 중 · ${PATROL_META.find((p) => p.id === u.patrol.id).name} (남은 ${Math.ceil(u.patrol.remaining)}분)`;
+    if (u.mode === 'work') return `${TASKS[u.work.kind].ko} ${u.work.started ? `중 (남은 ${Math.ceil(u.work.remaining)}분)` : '하러 이동 중'}`;
     if (u.mode === 'goto') return `이동 중 → ${ROOM_LABEL[u.home]}`;
     if (this.isInjured(u)) return `부상 · ${ROOM_LABEL[u.home]}`;
     return `대기 · ${ROOM_LABEL[u.home]}`;
@@ -267,7 +393,10 @@ export class Sim {
     if (u.moving) u.anim += dt * 8;
     if (was && !u.path.length) this.arrive(u);
 
-    if (u.mode === 'mission' && u.phase === 'away') {
+    if (u.mode === 'work' && u.work) {
+      if (!u.path.length) u.work.started = true;
+      if (u.work.started) { const T = TASKS[u.work.kind]; u.work.remaining -= dm; this.snow = Math.max(0, this.snow - T.rate * dm); if (u.work.remaining <= 0) this.finishWork(u); }
+    } else if (u.mode === 'mission' && u.phase === 'away') {
       u.mission.remaining -= dm;
       if (u.mission.remaining <= 0) this.finishMission(u);
     } else if (u.mode === 'patrol' && u.patrol) {
@@ -290,7 +419,10 @@ export class Sim {
   }
 
   stepMove(u, dt) {
-    let remain = WALK * Math.max(0.4, 1 + u.fx.speed) * dt * TS;
+    let spd = 1 + u.fx.speed; const w = this.weatherFx();
+    if (w.speed && !(u.fx.coldProof || u.warm === this.day)) spd += w.speed;                 // 한파: 이동 속도 감소
+    if (isOutdoor(u.tx, u.ty)) spd -= SNOW_SLOW * (this.snow / 100);                          // 쌓인 눈: 야외 이동 감소
+    let remain = WALK * Math.max(0.35, spd) * dt * TS;
     while (remain > 0 && u.path.length) {
       const [tx, ty] = u.path[0];
       const gx = tx * TS + 8, gy = ty * TS + 15, dx = gx - u.x, dy = gy - u.y, d = Math.hypot(dx, dy);
@@ -319,7 +451,7 @@ export class Sim {
     if (r < p * 0.8) { result = 'success'; reward = Math.round(m.reward * mult); u.mor = Math.max(0, Math.min(100, u.mor + 5 + u.fx.mor)); this.rep += (m.risk > 0.4 ? 2 : 1) + u.fx.rep; }
     else if (r < p) { result = 'partial'; reward = Math.round(m.reward * 0.5 * mult); loss = Math.round(this.rand() * 10 * hurt); u.mor = Math.min(100, u.mor + 1); }
     else { loss = Math.round((8 + this.rand() * 22 + m.risk * 20) * hurt); u.mor = Math.max(0, u.mor - 9); this.rep -= 1; }
-    u.hp = Math.max(5, u.hp - loss); this.funds += reward;
+    u.hp = Math.max(5, u.hp - loss); this.funds += reward; u.kit = false;
     this.dayLog.missions.push({ who: u.name, id: u.id, dept: u.dept, name: m.name, result, reward, loss, clock: Math.floor(this.clock) });
     const label = { success: '성공', partial: '부분 성공', fail: '실패' }[result];
     this.note(`${u.name} 임무 ${label}: ${m.name}${reward ? ` (+${reward.toLocaleString('ko-KR')} CR)` : ''}${loss ? ` · 부상 -${loss}` : ''}`, result === 'fail' ? 'bad' : 'good');
@@ -354,10 +486,11 @@ export class Sim {
     if (!preview) for (const u of this.units) {
       if (u.mode === 'mission' && u.mission) { u.mission.remaining = 0; this.finishMission(u); u.phase = null; u.mode = 'idle'; u.mission = null; const s = this.spot(u.home); u.place(s[0], s[1]); }
       if (u.mode === 'patrol' && u.patrol) { this.finishPatrol(u); }
+      if (u.mode === 'work' && u.work) { u.work = null; u.mode = 'idle'; }
     }
     const L = this.dayLog;
     const income = L.missions.reduce((a, m) => a + m.reward, 0);
-    const upkeep = this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0);
+    const upkeep = Math.max(0, this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0) + this.furnitureUpkeep());
     const depts = DEPTS.map((d) => {
       const members = this.units.filter((u) => u.dept === d.key);
       const ms = L.missions.filter((m) => m.dept === d.key);
@@ -366,7 +499,7 @@ export class Sim {
     const injured = this.units.filter((u) => u.hp < 50).map((u) => ({ name: u.name, hp: Math.round(u.hp) }));
     const m = L.missions;
     const summary = `임무 ${m.length}건(성공 ${m.filter((x) => x.result === 'success').length}, 부분 ${m.filter((x) => x.result === 'partial').length}, 실패 ${m.filter((x) => x.result === 'fail').length}), 순찰 ${L.patrols.length}회, 명령 ${L.orders}건. 수입 ${fmtCredits(income)}, 운영비 ${fmtCredits(-upkeep)}.`;
-    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), depts, injured, summary };
+    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), depts, injured, summary };
   }
 
   /** 보고서 제출 후 다음 날로 */
@@ -375,10 +508,11 @@ export class Sim {
     const medics = this.units.filter((u) => u.dept === 'medical').length;
     for (const u of this.units) {
       u.hp = Math.min(100, u.hp + 22 + (u.hp < 50 ? 10 * medics : 0));
-      u.mor = Math.round(u.mor + (60 - u.mor) * 0.3);
-      u.mode = 'idle'; u.phase = null; u.mission = null; u.patrol = null; u.away = false; u.heard.clear();
+      u.mor = Math.min(100, Math.round(u.mor + (60 - u.mor) * 0.3) + Math.round(u.fx.rest));
+      u.mode = 'idle'; u.phase = null; u.mission = null; u.patrol = null; u.work = null; u.away = false; u.heard.clear();
       const s = this.spot(u.home); u.place(s[0], s[1]);
     }
+    this.weather = { today: this.weather.next, next: rollWeather(this.rand) }; this.snow = dailySnow(this.snow, this.weather.today);
     this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
     this.note(`DAY ${this.day} 개시 — 자금 ${fmtCredits(this.funds)}`, 'info', false);
@@ -387,8 +521,8 @@ export class Sim {
   /* ── 저장/복원 ── */
   serialize() {
     const units = {};
-    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, units };
+    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
@@ -396,6 +530,11 @@ export class Sim {
     this.dayLog = s.dayLog || this.freshLog(); this.log = s.log || [];
     this.research = { ...freshResearch(), ...(s.research || {}) };
     this.research.abilities = (this.research.abilities || []).filter((a) => ABILITY[a]);
+    if (s.weather && WEATHERS[s.weather.today] && WEATHERS[s.weather.next]) this.weather = { today: s.weather.today, next: s.weather.next };
+    if (Number.isFinite(s.snow)) this.snow = Math.max(0, Math.min(100, s.snow));
+    this.inv = {}; for (const [id, n] of Object.entries(s.inv || {})) if (ITEM[id] && Number.isInteger(n) && n > 0) this.inv[id] = n;
+    for (const room of ROOM_KEYS) for (let i = 0; i < FURN_SLOTS; i++) { const id = s.placed?.[room]?.[i]; this.placed[room][i] = id && ITEM[id]?.cat === 'furniture' ? id : null; }
+    this.syncSlots();
     for (const [id, st] of Object.entries(s.units || {})) {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
@@ -407,7 +546,13 @@ export class Sim {
         u.eq = (c.eq || []).filter((t) => u.traits.includes(t)).slice(0, MAX_TRAITS); u.ab = (c.ab || []).filter((a) => this.research.abilities.includes(a)).slice(0, MAX_ABILITIES);
         const al = emptyAlloc(); let left = u.pool; for (const { k } of CSTATS) { const v = Math.max(0, Math.min(STAT_MAX, Math.floor(c.alloc?.[k] || 0), left)); al[k] = v; left -= v; } u.alloc = al;
       }
-      if (st.mode === 'mission' && st.mission && st.phase !== 'back') { u.mode = 'mission'; u.phase = 'away'; u.mission = st.mission; u.away = true; }
+      if (st.g) {
+        const g = st.g; for (const slot of ['armor', 'acc']) { const gid = g.gear?.[slot]; u.gear[slot] = gid && ITEM[gid]?.cat === 'equip' && ITEM[gid].slot === slot ? gid : null; }
+        for (const { k } of CSTATS) u.bonus[k] = Math.max(0, Math.min(STAT_ITEM_CAP, Math.floor(g.bonus?.[k] || 0)));
+        u.kit = !!g.kit; u.warm = Number.isInteger(g.warm) ? g.warm : 0; u.aff = Math.max(0, Math.min(AFF_MAX, Math.floor(g.aff || 0))); u.talked = g.talked || 0; u.asked = g.asked || 0;
+      }
+      if (st.mode === 'work' && st.work && TASKS[st.work.kind] && Number.isFinite(st.work.remaining)) { u.mode = 'work'; u.work = { kind: st.work.kind, remaining: st.work.remaining, total: TASKS[st.work.kind].dur, started: true }; const tiles = st.work.kind === 'furnace' ? [FURNACE.spot] : yardWorkTiles(); const sp = tiles[Math.floor(this.rand() * tiles.length)]; u.place(sp[0], sp[1]); }
+      else if (st.mode === 'mission' && st.mission && st.phase !== 'back') { u.mode = 'mission'; u.phase = 'away'; u.mission = st.mission; u.away = true; }
       else if (st.mode === 'patrol' && st.patrol) { u.mode = 'patrol'; u.patrol = st.patrol; const wp = PATROLS[u.patrol.id][0]; u.place(wp[0], wp[1]); u.patrol.wi = 0; const p = findPath(u.tx, u.ty, PATROLS[u.patrol.id][1][0], PATROLS[u.patrol.id][1][1]); u.path = p || []; u.patrol.wi = 1; }
       else { u.mode = 'idle'; const sp = this.spot(u.home); u.place(sp[0], sp[1]); }
     }

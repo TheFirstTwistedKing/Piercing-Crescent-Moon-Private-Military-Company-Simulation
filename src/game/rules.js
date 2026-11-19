@@ -31,12 +31,13 @@ export function autoAlloc(pool, dept) {
 }
 
 /** 무기·장착 특성·장착 능력의 효과를 합산 */
-export function sumFx(u) {
-  const fx = { str: 0, def: 0, skl: 0, cha: 0, chm: 0, wis: 0, succ: 0, night: 0, day: 0, reward: 0, dmg: 0, heal: 0, speed: 0, upkeep: 0, rep: 0, mor: 0, patrolSafe: false, copycat: false };
+export function sumFx(u, extras = []) {
+  const fx = { str: 0, def: 0, skl: 0, cha: 0, chm: 0, wis: 0, succ: 0, night: 0, day: 0, reward: 0, dmg: 0, heal: 0, speed: 0, upkeep: 0, rep: 0, mor: 0, rest: 0, patrolSafe: false, copycat: false, coldProof: false, fogProof: false };
   const add = (o) => { for (const [k, v] of Object.entries(o || {})) { if (typeof v === 'boolean') fx[k] = fx[k] || v; else fx[k] = (fx[k] || 0) + v; } };
   add(WEAPON[u.weapon]?.fx);
   for (const id of u.eq) add(TRAIT[id]?.fx);
   for (const id of u.ab) add(ABILITY[id]?.fx);
+  for (const e of extras) add(e);
   return fx;
 }
 export const clampStat = (v) => Math.max(0, Math.min(15, v));

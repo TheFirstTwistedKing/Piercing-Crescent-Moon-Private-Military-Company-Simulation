@@ -7,9 +7,10 @@ import { WEAPONS, WEAPON, weaponIcon } from '../game/weapons.js';
 import { TRAITS, TRAIT, ABILITIES, ABILITY, RARITY, GACHA_ODDS, MAX_TRAITS, MAX_ABILITIES, fxLines } from '../game/traits.js';
 import { CSTATS, STAT_MAX, sumAlloc } from '../game/rules.js';
 import { drawPreview, OX } from '../game/sprites.js';
+import { ITEM, ITEMS, STAT_ITEM_CAP } from '../game/shop.js';
 import { h, icon } from '../core/ui.js';
 
-const TABS = [['name', '이름'], ['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['trait', '특성'], ['ability', '능력']];
+const TABS = [['name', '이름'], ['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['gear', '장비'], ['trait', '특성'], ['ability', '능력']];
 const fxList = (fx) => h('ul', { class: 'fxl' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
 const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(document.createElement('canvas'), { width: w, height: hh }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.translate(-OX, 0); drawPreview(c, u, opts); cv.className = 'px'; cv.style.width = w * scale + 'px'; cv.style.height = hh * scale + 'px'; return cv; };
 
@@ -36,7 +37,7 @@ export function mountCustom(root, ctx, arg) {
   const paintStage = () => {
     const u = U(), d = DEPT[u.dept];
     stageInfo.replaceChildren(h('h2', {}, u.name, h('em', { class: 'lat' }, u.latin)), h('p', { class: 'sub' }, `${d.no} ${d.en} · ${u.role}`),
-      h('p', { class: 'chips' }, h('span', { class: 'chip' }, WEAPON[u.weapon].name), ...u.eq.map((t) => h('span', { class: `chip ${TRAIT[t].rarity}` }, TRAIT[t].name)), ...u.ab.map((a) => h('span', { class: 'chip ab' }, ABILITY[a].name))),
+      h('p', { class: 'chips' }, u.isLeader ? h('span', { class: 'chip l' }, '팀장') : null, h('span', { class: 'chip' }, WEAPON[u.weapon].name), ...u.eq.map((t) => h('span', { class: `chip ${TRAIT[t].rarity}` }, TRAIT[t].name)), ...u.ab.map((a) => h('span', { class: 'chip ab' }, ABILITY[a].name))),
       h('p', { class: 'sub' }, `스탯 포인트 ${sumAlloc(u.alloc)} / ${u.pool} · 특성 뽑기 ${sim.pullsLeft(u)}회 남음`));
     drawStage();
   };
@@ -93,6 +94,17 @@ export function mountCustom(root, ctx, arg) {
       h('p', { class: 'f-label' }, '임무 능력치 (기본 + 보정)'), h('p', { class: 'derived' }, ...[['cmb', '전투'], ['def', '방어'], ['mob', '기동'], ['med', '의료'], ['int', '정보']].map(([k, l]) => h('span', {}, l, h('b', {}, String(Math.round(dv[k]))), h('small', {}, `(${Math.round(dv[k] - base[k]) >= 0 ? '+' : ''}${Math.round(dv[k] - base[k])})`)))));
   };
 
+  const gearTab = () => {
+    const u = U(), have = (cat) => ITEMS.filter((i) => i.cat === cat && sim.owned(i.id) > 0);
+    const act = (fn, msg) => () => { const r = fn(); if (!r.ok) { Audio.sfx('error'); ctx.toast(r.reason, 'bad'); return; } Audio.sfx('confirm'); if (msg) ctx.toast(msg, 'good'); changed(); };
+    const slot = (key, label) => { const id = u.gear[key]; return h('li', { class: `own ${id ? 'on' : ''}`, style: '--rc:#7fc8ff' }, h('div', {}, h('span', { class: 'badge' }, label), h('b', {}, id ? ITEM[id].name : '비어 있음'), id ? fxList(ITEM[id].fx) : h('small', {}, '아래 보유 장비에서 장착하세요.')), id ? h('button', { class: 'btn ghost sm', type: 'button', onclick: act(() => sim.unequipGear(id && u.id, key)) }, '해제') : null); };
+    const gears = have('equip'), stats = have('stat'), cons = have('consume');
+    return h('div', {}, h('p', { class: 'f-label' }, '장착 중'), h('ul', { class: 'owns' }, slot('armor', '방어구'), slot('acc', '장신구')),
+      h('p', { class: 'f-label', style: 'margin-top:20px' }, '보유 장비'), gears.length ? h('ul', { class: 'owns' }, ...gears.map((it) => h('li', { class: 'own', style: '--rc:#7fc8ff' }, h('div', {}, h('span', { class: 'badge' }, it.slot === 'armor' ? '방어구' : '장신구'), h('b', {}, `${it.name} ×${sim.owned(it.id)}`), fxList(it.fx)), h('button', { class: 'btn primary sm', type: 'button', onclick: act(() => sim.equipGear(u.id, it.id)) }, '장착')))) : h('p', { class: 'hint' }, '보유한 장비가 없습니다. 상점에서 구매하세요.'),
+      h('p', { class: 'f-label', style: 'margin-top:20px' }, `능력치 증표 (스탯당 최대 +${STAT_ITEM_CAP})`), h('ul', { class: 'owns' }, ...CSTATS.map(({ k, ko }) => { const it = ITEM['st_' + k], n = sim.owned(it.id); return h('li', { class: 'own' }, h('div', {}, h('b', {}, ko), h('small', {}, `현재 보너스 +${u.bonus[k]} / ${STAT_ITEM_CAP} · 보유 ${n}개`)), h('button', { class: 'btn ghost sm', type: 'button', disabled: n < 1 || u.bonus[k] >= STAT_ITEM_CAP, onclick: act(() => sim.useStatItem(u.id, it.id), `${ko} +1`) }, '사용')); })),
+      h('p', { class: 'f-label', style: 'margin-top:20px' }, '소모품'), cons.length ? h('ul', { class: 'owns' }, ...cons.map((it) => h('li', { class: 'own' }, h('div', {}, h('b', {}, `${it.name} ×${sim.owned(it.id)}`), h('small', {}, it.desc)), h('button', { class: 'btn ghost sm', type: 'button', onclick: act(() => sim.useConsumable(u.id, it.id), `${it.name} 사용`) }, '사용')))) : h('p', { class: 'hint' }, '보유한 소모품이 없습니다.'));
+  };
+
   const traitTab = () => {
     const u = U(), left = sim.pullsLeft(u), total = 10 + sim.research.pulls;
     const odds = h('p', { class: 'odds' }, ...['c', 'r', 'l'].map((r) => h('span', { style: `color:${RARITY[r].color}` }, `${RARITY[r].ko} ${Math.round(GACHA_ODDS[r] * 100)}%`)));
@@ -118,7 +130,7 @@ export function mountCustom(root, ctx, arg) {
             : h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel/research'); } }, '연구 필요 (10pt)')); })));
   };
 
-  const paintPanel = () => { body.replaceChildren(({ name: nameTab, look: lookTab, weapon: weaponTab, stats: statsTab, trait: traitTab, ability: abilityTab })[tab]()); };
+  const paintPanel = () => { body.replaceChildren(({ name: nameTab, look: lookTab, weapon: weaponTab, stats: statsTab, gear: gearTab, trait: traitTab, ability: abilityTab })[tab]()); };
   const paintAll = () => { paintList(); paintStage(); paintTabs(); paintDirs(); paintPanel(); };
 
   root.append(h('div', { class: 'cust screen' },
