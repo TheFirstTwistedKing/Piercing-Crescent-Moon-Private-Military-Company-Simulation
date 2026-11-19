@@ -6,6 +6,9 @@ import { DEPTS, DEPT, ROOM_LABEL, MISSIONS, MISSION, PATROL_META, STAT_KO } from
 import { clockInfo, successChance, fmtCredits, MIN_PER_SEC } from '../game/sim.js';
 import { WORLD_W, WORLD_H } from '../game/map.js';
 import { h, icon, modal, clamp, pad } from '../core/ui.js';
+import { buildSpeed } from './speed.js';
+import { WEAPON } from '../game/weapons.js';
+import { TRAIT, ABILITY } from '../game/traits.js';
 
 const fmtReal = (sec) => { const s = Math.round(sec); return s >= 60 ? `${Math.floor(s / 60)}분 ${s % 60}초` : `${s}초`; };
 const fmtGame = (m) => `${m >= 60 ? `${Math.floor(m / 60)}시간 ` : ''}${m % 60 ? `${m % 60}분` : ''}`.trim();
@@ -66,7 +69,7 @@ export function mountField(root, ctx) {
     if (e.target.matches('input,textarea')) return;
     if (e.type === 'keydown') {
       if (e.code === 'Space') { e.preventDefault(); sim.setSpeed(sim.speed === 0 ? 1 : 0); paintSpeed(); Audio.sfx('click'); }
-      else if (e.key === '1') { sim.setSpeed(1); paintSpeed(); } else if (e.key === '2') { sim.setSpeed(2); paintSpeed(); }
+      else if (e.key === '1') { sim.setSpeed(1); paintSpeed(); } else if (e.key === '2') { sim.setSpeed(2); paintSpeed(); } else if (e.key === '3') { sim.setSpeed(3); paintSpeed(); }
       else if (e.key === 'Escape') { if (dlg.open) closeDlg(); else deselect(); }
       else keys.add(e.key.toLowerCase());
     } else keys.delete(e.key.toLowerCase());
@@ -76,8 +79,7 @@ export function mountField(root, ctx) {
 
   /* ── 상단 HUD ── */
   const clk = h('div', { class: 'hud-clock' }); const phase = h('em');
-  const speed = h('div', { class: 'speed' }, ...[['pause', 0, '정지 (Space)'], ['play', 1, '재생 (1)'], ['fast', 2, '2배속 (2)']].map(([ic, v, label]) => h('button', { class: 'icon-btn', type: 'button', 'data-s': v, 'aria-label': label, title: label, html: icon(ic, 18), onclick: () => { sim.setSpeed(v); Audio.sfx('click'); paintSpeed(); } })));
-  const paintSpeed = () => speed.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.s === sim.speed));
+  const sp = buildSpeed(sim), speed = sp.el, paintSpeed = sp.paint;
   const bar = h('div', { class: 'meter' }, h('i'));
   const paintHud = () => { const c = clockInfo(sim.clock); clk.replaceChildren(h('b', {}, `DAY ${pad(sim.day)}`), h('span', {}, c.text), h('em', { class: c.night ? 'night' : '' }, c.phase)); bar.firstChild.style.width = `${(sim.clock / 1260) * 100}%`; paintSpeed(); };
   const hud = h('header', { class: 'hud' },
@@ -107,7 +109,8 @@ export function mountField(root, ctx) {
     const u = sel && sim.byId[sel]; if (!u) { sheet.hidden = true; return; }
     sheet.hidden = false; const d = DEPT[u.dept], can = sim.canCommand(u), hurt = sim.isInjured(u);
     const head = h('header', {}, h('i', { class: 'dot big', style: `background:${d.color}` }), h('div', {}, h('b', {}, u.name), h('small', { class: 'lat' }, u.latin.toUpperCase()), h('small', {}, `${u.role} · ${d.no} ${d.en}`)), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '닫기', html: icon('close', 16), onclick: deselect }));
-    const info = h('div', { class: 'info' }, h('p', { class: 'stat-line' }, sim.statusText(u)), bars(u), h('p', { class: 'stats' }, ...Object.entries(STAT_KO).map(([k, l]) => h('span', {}, l, h('b', {}, String(u.stats[k]))))));
+    const chips = h('p', { class: 'chips' }, h('span', { class: 'chip' }, WEAPON[u.weapon].name), ...u.eq.map((t) => h('span', { class: `chip ${TRAIT[t].rarity}` }, TRAIT[t].name)), ...u.ab.map((a) => h('span', { class: 'chip ab' }, ABILITY[a].name)));
+    const info = h('div', { class: 'info' }, h('p', { class: 'stat-line' }, sim.statusText(u)), chips, bars(u), h('p', { class: 'stats' }, ...Object.entries(STAT_KO).map(([k, l]) => h('span', {}, l, h('b', {}, String(Math.round(u.dv[k])))))));
     let body;
     if (step === 'main') {
       const cmd = (label, sub, fn, disabled, why) => h('button', { class: 'cmd', type: 'button', disabled, title: disabled ? why : '', onclick: fn }, h('b', {}, label), h('small', {}, disabled ? why : sub), h('span', { html: icon('arrow', 18) }));
@@ -115,14 +118,15 @@ export function mountField(root, ctx) {
         cmd('방으로 보내기', '지정한 방으로 이동·배치', () => { step = 'room'; paintSheet(); }, !can.ok && u.mode === 'mission', can.reason),
         cmd('임무 보내기', '정문을 나가 임무 수행 · 성공 시 보상', () => { step = 'mission'; paintSheet(); }, !can.ok || hurt, hurt ? '부상(HP 25 미만)' : can.reason),
         cmd('순찰 보내기', '정해진 경로를 돌며 경계', () => { step = 'patrol'; paintSheet(); }, !can.ok || hurt, hurt ? '부상(HP 25 미만)' : can.reason),
-        cmd('대화 엿듣기', '혼잣말을 몰래 듣는다', () => openDlg(u.id), false, ''));
+        cmd('대화 엿듣기', '혼잣말을 몰래 듣는다', () => openDlg(u.id), false, ''),
+        cmd('커스터마이징', '머리·무기·스탯·특성·능력', () => { Audio.sfx('select'); ctx.go('#/panel/custom/' + u.id); }, false, ''));
     } else {
       const back = h('button', { class: 'link', type: 'button', onclick: () => { step = 'main'; paintSheet(); } }, '← 명령 목록');
       const done = (r, okMsg) => { if (!r.ok) { Audio.sfx('error'); toastLocal(r.reason); return; } Audio.sfx('send'); follow = u.id; if (okMsg) toastLocal(okMsg, 'order'); step = 'main'; paintSheet(); };
       if (step === 'room') body = h('div', { class: 'steps list' }, back, ...Object.entries(ROOM_LABEL).map(([k, l]) => h('button', { class: `opt ${u.home === k ? 'cur' : ''}`, type: 'button', onclick: () => done(sim.sendToRoom(u.id, k), `${u.name} → ${l}`) }, h('b', {}, l), h('small', {}, u.home === k ? '현재 배치' : DEPTS.find((x) => x.room === k)?.en || 'Lobby'))));
       else if (step === 'patrol') body = h('div', { class: 'steps list' }, back, ...PATROL_META.map((p) => h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendPatrol(u.id, p.id), `${u.name} 순찰 출발: ${p.name}`) }, h('b', {}, p.name), h('small', {}, `${p.desc} · 게임 ${fmtGame(p.dur)} (실제 약 ${fmtReal(p.dur / MIN_PER_SEC)})`))));
       else {
-        const mk = (m) => { const p = successChance(u, m); return h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendMission(u.id, m.id)) }, h('b', {}, m.name), h('small', {}, `게임 ${fmtGame(m.dur)}(약 ${fmtReal(m.dur / MIN_PER_SEC)}) · 위험 ${Math.round(m.risk * 100)}% · ${fmtCredits(m.reward)} · 주요능력 ${STAT_KO[m.stat]}`), h('span', { class: `pct ${p < 0.5 ? 'low' : ''}` }, `${Math.round(p * 100)}%`)); };
+        const mk = (m) => { const p = sim.chance(u, m); return h('button', { class: 'opt', type: 'button', onclick: () => done(sim.sendMission(u.id, m.id)) }, h('b', {}, m.name), h('small', {}, `게임 ${fmtGame(m.dur)}(약 ${fmtReal(m.dur / MIN_PER_SEC)}) · 위험 ${Math.round(m.risk * 100)}% · ${fmtCredits(m.reward)} · 주요능력 ${STAT_KO[m.stat]}`), h('span', { class: `pct ${p < 0.5 ? 'low' : ''}` }, `${Math.round(p * 100)}%`)); };
         body = h('div', { class: 'steps list' }, back, h('p', { class: 'sub-h' }, `${d.ko} 임무`), ...MISSIONS.filter((m) => m.dept === u.dept).map(mk),
           h('details', { class: 'more' }, h('summary', {}, '타 부서 임무로 지원 투입 (성공률 감소)'), ...MISSIONS.filter((m) => m.dept !== u.dept).map(mk)));
       }

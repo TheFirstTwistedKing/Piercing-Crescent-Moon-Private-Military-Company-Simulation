@@ -13,6 +13,8 @@ import { mountPanel } from './screens/panel.js';
 import { mountCctv } from './screens/cctv.js';
 import { mountField } from './screens/field.js';
 import { mountReport } from './screens/report.js';
+import { mountCustom } from './screens/custom.js';
+import { mountResearch } from './screens/research.js';
 import { engine } from './game/engine.js';
 
 import * as Session from './core/session.js';
@@ -76,22 +78,24 @@ function startWatch() {
   }, 5000);
 }
 
-const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport };
+const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport, '#/panel/custom': mountCustom, '#/panel/research': mountResearch };
 
 let chain = Promise.resolve();
 function route(force = false) { chain = chain.then(() => doRoute(force)).catch((e) => console.error(e)); return chain; }
 
 async function doRoute(force) {
   if (S.booting) return;
-  let hash = location.hash || '#/login';
+  let hash = location.hash || '#/login', arg = null;
+  const cm = hash.match(/^(#\/panel\/custom)\/([\w-]+)$/); if (cm) { hash = cm[1]; arg = cm[2]; }
   let mount;
   if (!S.user) { hash = hash === '#/signup' ? '#/signup' : '#/login'; mount = hash === '#/signup' ? mountSignup : mountLogin; }
   else if (!S.profile?.mfa?.enabled) { hash = '#/setup'; mount = mountSetup; }
   else if (!S.verified) { hash = '#/verify'; mount = mountVerify; }
   else if (!S.deviceOk) { hash = '#/device'; mount = mountDevice; }
   else { if (!PANEL[hash]) hash = '#/panel'; mount = PANEL[hash]; }
-  if (location.hash !== hash) history.replaceState(null, '', hash);
-  const key = `${hash}|${S.user?.uid}|${S.verified}|${S.deviceOk}`;
+  const full = arg ? `${hash}/${arg}` : hash;
+  if (location.hash !== full) history.replaceState(null, '', full);
+  const key = `${full}|${S.user?.uid}|${S.verified}|${S.deviceOk}`;
   if (!force && key === S.lastKey) return;
   S.lastKey = key;
 
@@ -103,7 +107,7 @@ async function doRoute(force) {
   }
   if (S.user && S.verified && S.deviceOk && !engine.running) { app.replaceChildren(h('div', { class: 'loading screen' }, h('span', {}, '데이터 동기화 중…'))); await engine.start(S.user.uid); }
   app.replaceChildren(root);
-  S.cleanup = mount(root, ctx) || null;
+  S.cleanup = mount(root, ctx, arg) || null;
   document.body.dataset.screen = hash.replace('#/', '').replace('/', '-');
 }
 addEventListener('hashchange', () => route());

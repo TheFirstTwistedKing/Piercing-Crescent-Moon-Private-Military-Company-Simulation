@@ -1,6 +1,11 @@
 // 시뮬레이션 코어. 렌더/DOM 과 완전히 분리되어 Node 에서도 테스트된다.
 import { ROSTER, DEPT, DEPTS, MISSION, PATROL_META, PATROL_EVENTS, MONO, ROOM_LABEL } from './data.js';
 import { TS, GATE, PATROLS, roomFreeTiles, findPath, ROOMS } from './map.js';
+import { WEAPON } from './weapons.js';
+import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
+import { HAIR } from './hair.js';
+import { RESEARCH_BY_KEY, freshResearch } from './research.js';
+import { CSTATS, STAT_MAX, randomPool, sumAlloc, autoAlloc, emptyAlloc, sumFx, clampStat, derive } from './rules.js';
 
 // 하루 = 아침(낮) 12시간 + 밤 9시간 = 게임 내 21시간(06:00 → 03:00), 실제 플레이타임 12분(1배속).
 export const DAY_PHASE_MIN = 12 * 60;
@@ -18,17 +23,21 @@ export function clockInfo(clock) {
 }
 export const fmtCredits = (n) => `${n < 0 ? '-' : ''}${Math.abs(Math.round(n)).toLocaleString('ko-KR')} CR`;
 
-export function successChance(u, m) {
-  const stat = u.stats[m.stat] ?? 50;
+export function successChance(u, m, night = false) {
+  const stat = u.dv ? u.dv[m.stat] : u.stats[m.stat];
   const same = u.dept === m.dept;
   let p = 0.9 - m.risk * 0.95 + (stat - 55) / 220 + (u.mor - 50) / 400 + (same ? 0.07 : -0.13);
+  if (u.fx) p += u.fx.succ + (night ? u.fx.night : u.fx.day) + (u.cs?.cha || 0) * 0.004;
   if (u.hp < 50) p -= (50 - u.hp) / 250;
   return Math.max(0.05, Math.min(0.97, p));
 }
 
 class Unit {
-  constructor(base) {
+  constructor(base, rand = Math.random) {
     Object.assign(this, base);
+    // 커스터마이징: 포인트 풀(40~50 랜덤), 배분, 특성 뽑기, 장착
+    this.pool = randomPool(rand); this.alloc = autoAlloc(this.pool, base.dept);
+    this.used = 0; this.traits = []; this.eq = []; this.ab = [];
     this.hp = 100; this.mor = 60;
     this.home = base.dept === 'operation' ? 'operation' : base.dept; // 부서 방 = 부서 key
     this.mode = 'idle';          // idle | goto | mission | patrol
@@ -44,12 +53,14 @@ class Unit {
 export class Sim {
   constructor(saved = null, rand = Math.random) {
     this.rand = rand;
-    this.units = ROSTER.map((b) => new Unit({ ...b, stats: { ...b.stats }, look: { ...b.look } }));
+    this.units = ROSTER.map((b) => new Unit({ ...b, stats: { ...b.stats }, look: { ...b.look } }, this.rand));
     this.byId = Object.fromEntries(this.units.map((u) => [u.id, u]));
     this.day = 1; this.clock = 0; this.funds = START_FUNDS; this.rep = 0; this.speed = 0; this.ended = false;
+    this.research = freshResearch();
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
     this.listeners = {}; this.dirty = false;
     for (const u of this.units) { const s = this.spot(u.home); u.place(s[0], s[1]); }
+    this.refresh();
     if (saved) this.restore(saved);
   }
 
@@ -65,6 +76,75 @@ export class Sim {
   freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0 }; }
 
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
+
+  /* ── 커스터마이징 / 연구 ── */
+  chance(u, m) { return successChance(u, m, this.clock >= DAY_PHASE_MIN); }
+  incomeMult() { return 1 + 0.005 * this.research.income; }
+  pullsLeft(u) { return 10 + this.research.pulls - u.used; }
+  /** 효과 합산·파생 능력치 갱신 (카피캣은 같은 부서 동료 값에 의존하므로 2단계) */
+  refresh() {
+    for (const u of this.units) { u.fx = sumFx(u); u.csBase = Object.fromEntries(CSTATS.map(({ k }) => [k, clampStat(u.alloc[k] + u.fx[k])])); }
+    for (const u of this.units) {
+      u.cs = { ...u.csBase };
+      if (u.fx.copycat) for (const { k } of CSTATS) { const best = Math.max(0, ...this.units.filter((m) => m !== u && m.dept === u.dept).map((m) => m.csBase[k])); u.cs[k] = Math.max(u.cs[k], Math.round(best * 0.7)); }
+      u.dv = derive(u.stats, u.cs);
+    }
+    this.dirty = true; this.emit('custom');
+  }
+  setHair(id, style, color) {
+    const u = this.byId[id]; if (!HAIR[style]) return { ok: false, reason: '없는 스타일' };
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, reason: '색 형식 오류' };
+    u.look.hairStyle = style; u.look.hair = color.toLowerCase(); this.dirty = true; this.emit('custom'); return { ok: true };
+  }
+  setWeapon(id, w) { const u = this.byId[id]; if (!WEAPON[w]) return { ok: false, reason: '없는 무기' }; u.weapon = w; this.refresh(); return { ok: true }; }
+  /** 스탯 한 칸을 v 로(0~10, 총합은 포인트 풀 이내). 실제 반영된 값을 돌려준다. */
+  setStat(id, k, v) {
+    const u = this.byId[id]; if (!(k in u.alloc)) return { ok: false };
+    const others = sumAlloc(u.alloc) - u.alloc[k];
+    u.alloc[k] = Math.max(0, Math.min(STAT_MAX, Math.floor(v), u.pool - others)); this.refresh(); return { ok: true, value: u.alloc[k] };
+  }
+  resetStats(id) { const u = this.byId[id]; u.alloc = emptyAlloc(); this.refresh(); }
+  autoStats(id) { const u = this.byId[id]; u.alloc = autoAlloc(u.pool, u.dept); this.refresh(); }
+  /** 특성 뽑기: 일반 70% / 희귀 25% / 전설 5%. 이미 가진 특성은 제외. */
+  pullTrait(id) {
+    const u = this.byId[id];
+    if (this.pullsLeft(u) <= 0) return { ok: false, reason: '뽑기 기회를 모두 사용했습니다.' };
+    const roll = this.rand(), rar = roll < GACHA_ODDS.l ? 'l' : roll < GACHA_ODDS.l + GACHA_ODDS.r ? 'r' : 'c';
+    let pool = TRAITS.filter((t) => t.rarity === rar && !u.traits.includes(t.id));
+    if (!pool.length) pool = TRAITS.filter((t) => !u.traits.includes(t.id));
+    if (!pool.length) return { ok: false, reason: '더 뽑을 특성이 없습니다.' };
+    const t = pool[Math.floor(this.rand() * pool.length)];
+    u.traits.push(t.id); u.used++; this.dirty = true; this.emit('custom');
+    return { ok: true, trait: t, left: this.pullsLeft(u) };
+  }
+  toggleTrait(id, tid) {
+    const u = this.byId[id]; if (!u.traits.includes(tid)) return { ok: false, reason: '보유하지 않은 특성' };
+    if (u.eq.includes(tid)) u.eq = u.eq.filter((x) => x !== tid);
+    else { if (u.eq.length >= MAX_TRAITS) return { ok: false, reason: `특성은 최대 ${MAX_TRAITS}개까지 장착할 수 있습니다.` }; u.eq.push(tid); }
+    this.refresh(); return { ok: true };
+  }
+  toggleAbility(id, aid) {
+    const u = this.byId[id]; if (!this.research.abilities.includes(aid)) return { ok: false, reason: '아직 연구하지 않은 능력입니다.' };
+    if (u.ab.includes(aid)) u.ab = u.ab.filter((x) => x !== aid);
+    else { if (u.ab.length >= MAX_ABILITIES) return { ok: false, reason: `능력은 최대 ${MAX_ABILITIES}개까지 장착할 수 있습니다.` }; u.ab.push(aid); }
+    this.refresh(); return { ok: true };
+  }
+  /** 연구 상태: {done, level, max, cost, can} */
+  researchState(key) {
+    const d = RESEARCH_BY_KEY[key], R = this.research;
+    if (d.kind === 'ability') { const done = R.abilities.includes(d.ability); return { done, cost: d.cost(0), can: !done && R.points >= d.cost(0) }; }
+    if (d.kind === 'once') { const done = !!R[d.key]; return { done, cost: d.cost(0), can: !done && R.points >= d.cost(0) }; }
+    const lv = R[d.key], done = lv >= d.max, cost = d.cost(lv); return { done, level: lv, max: d.max, cost, can: !done && R.points >= cost };
+  }
+  doResearch(key) {
+    const d = RESEARCH_BY_KEY[key]; if (!d) return { ok: false, reason: '없는 연구' };
+    const st = this.researchState(key);
+    if (st.done) return { ok: false, reason: '이미 완료한 연구입니다.' };
+    if (!st.can) return { ok: false, reason: `연구 포인트가 부족합니다. (필요 ${st.cost})` };
+    this.research.points -= st.cost;
+    if (d.kind === 'ability') this.research.abilities.push(d.ability); else if (d.kind === 'once') this.research[d.key] = true; else this.research[d.key]++;
+    this.refresh(); this.note(`연구 완료: ${d.name}`, 'good', false); return { ok: true };
+  }
 
   /* ── 명령 ── */
   canCommand(u) {
@@ -148,7 +228,7 @@ export class Sim {
   }
 
   /* ── 진행 ── */
-  setSpeed(s) { if (this.ended) s = 0; this.speed = s; }
+  setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended) s = 0; this.speed = s; }
 
   update(dtReal) {
     if (this.speed === 0 || this.ended) return;
@@ -178,7 +258,7 @@ export class Sim {
       // 치료: 의무실에 있으면 회복(의무팀 동석 시 2배)
       if (u.home === 'medical') {
         const medics = this.units.filter((x) => x.dept === 'medical' && x.mode === 'idle' && x.home === 'medical').length;
-        if (u.hp < 100) u.hp = Math.min(100, u.hp + dm * (0.1 + 0.06 * Math.min(2, medics)));
+        if (u.hp < 100) u.hp = Math.min(100, u.hp + dm * (0.1 + 0.06 * Math.min(2, medics)) * (1 + u.fx.heal + 0.1 * this.research.heal));
       }
       if (this.isInjured(u) && u.home !== 'medical') { this.note(`${u.name} 부상 — 의무실로 이동`, 'alert'); this.sendToRoom(u.id, 'medical', true); return; }
       u.wait -= dt;
@@ -190,7 +270,7 @@ export class Sim {
   }
 
   stepMove(u, dt) {
-    let remain = WALK * dt * TS;
+    let remain = WALK * Math.max(0.4, 1 + u.fx.speed) * dt * TS;
     while (remain > 0 && u.path.length) {
       const [tx, ty] = u.path[0];
       const gx = tx * TS + 8, gy = ty * TS + 15, dx = gx - u.x, dy = gy - u.y, d = Math.hypot(dx, dy);
@@ -213,26 +293,30 @@ export class Sim {
   }
 
   finishMission(u) {
-    const m = MISSION[u.mission.id]; const p = successChance(u, m); const r = this.rand();
+    const m = MISSION[u.mission.id]; const p = this.chance(u, m); const r = this.rand();
     let result = 'fail', reward = 0, loss = 0;
-    if (r < p * 0.8) { result = 'success'; reward = m.reward; u.mor = Math.min(100, u.mor + 5); this.rep += m.risk > 0.4 ? 2 : 1; }
-    else if (r < p) { result = 'partial'; reward = Math.round(m.reward * 0.5); loss = Math.round(this.rand() * 10); u.mor = Math.min(100, u.mor + 1); }
-    else { loss = Math.round(8 + this.rand() * 22 + m.risk * 20); u.mor = Math.max(0, u.mor - 9); this.rep -= 1; }
+    const mult = Math.max(0.1, (1 + u.fx.reward + u.cs.chm * 0.01) * this.incomeMult()), hurt = Math.max(0.2, 1 + u.fx.dmg);
+    if (r < p * 0.8) { result = 'success'; reward = Math.round(m.reward * mult); u.mor = Math.max(0, Math.min(100, u.mor + 5 + u.fx.mor)); this.rep += (m.risk > 0.4 ? 2 : 1) + u.fx.rep; }
+    else if (r < p) { result = 'partial'; reward = Math.round(m.reward * 0.5 * mult); loss = Math.round(this.rand() * 10 * hurt); u.mor = Math.min(100, u.mor + 1); }
+    else { loss = Math.round((8 + this.rand() * 22 + m.risk * 20) * hurt); u.mor = Math.max(0, u.mor - 9); this.rep -= 1; }
     u.hp = Math.max(5, u.hp - loss); this.funds += reward;
     this.dayLog.missions.push({ who: u.name, id: u.id, dept: u.dept, name: m.name, result, reward, loss, clock: Math.floor(this.clock) });
     const label = { success: '성공', partial: '부분 성공', fail: '실패' }[result];
     this.note(`${u.name} 임무 ${label}: ${m.name}${reward ? ` (+${reward.toLocaleString('ko-KR')} CR)` : ''}${loss ? ` · 부상 -${loss}` : ''}`, result === 'fail' ? 'bad' : 'good');
     // 정문으로 복귀
     u.phase = 'back'; u.away = false; u.place(GATE.x, GATE.y);
-    const s = this.spot(u.home); u.path = findPath(u.tx, u.ty, s[0], s[1]) || [];
+    const sp = this.spot(u.home); u.path = findPath(u.tx, u.ty, sp[0], sp[1]) || [];
   }
 
   patrolEvent(u) {
     const incident = this.rand() < 0.18;
     const ev = incident ? PATROL_EVENTS.incident[Math.floor(this.rand() * PATROL_EVENTS.incident.length)] : [PATROL_EVENTS.clear[Math.floor(this.rand() * PATROL_EVENTS.clear.length)], 'clear'];
     u.patrol.incidents.push({ text: ev[0], kind: ev[1] });
-    if (ev[1] === 'bad') u.hp = Math.max(5, u.hp - 5);
-    if (incident) { this.note(`${u.name} 순찰 보고: ${ev[0]}`, ev[1] === 'bad' ? 'bad' : 'good'); if (ev[1] === 'good') this.rep += 1; }
+    let kind = ev[1], text = ev[0];
+    if (kind === 'bad' && u.fx.patrolSafe) { kind = 'good'; text += ' — 원격 감지로 피해 없음'; }
+    if (kind === 'bad') u.hp = Math.max(5, u.hp - 5);
+    u.patrol.incidents[u.patrol.incidents.length - 1] = { text, kind };
+    if (incident) { this.note(`${u.name} 순찰 보고: ${text}`, kind === 'bad' ? 'bad' : 'good'); if (kind === 'good') this.rep += 1; }
   }
 
   finishPatrol(u) {
@@ -253,7 +337,7 @@ export class Sim {
     }
     const L = this.dayLog;
     const income = L.missions.reduce((a, m) => a + m.reward, 0);
-    const upkeep = UPKEEP_PER_UNIT * this.units.length;
+    const upkeep = this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0);
     const depts = DEPTS.map((d) => {
       const members = this.units.filter((u) => u.dept === d.key);
       const ms = L.missions.filter((m) => m.dept === d.key);
@@ -275,6 +359,7 @@ export class Sim {
       u.mode = 'idle'; u.phase = null; u.mission = null; u.patrol = null; u.away = false; u.heard.clear();
       const s = this.spot(u.home); u.place(s[0], s[1]);
     }
+    this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
     this.note(`DAY ${this.day} 개시 — 자금 ${fmtCredits(this.funds)}`, 'info', false);
   }
@@ -282,20 +367,30 @@ export class Sim {
   /* ── 저장/복원 ── */
   serialize() {
     const units = {};
-    for (const u of this.units) units[u.id] = { hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), units };
+    for (const u of this.units) units[u.id] = { c: { hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, units };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
     this.day = s.day; this.clock = s.clock; this.funds = s.funds; this.rep = s.rep || 0; this.ended = !!s.ended; this.dayStartFunds = s.dayStartFunds ?? s.funds;
     this.dayLog = s.dayLog || this.freshLog(); this.log = s.log || [];
+    this.research = { ...freshResearch(), ...(s.research || {}) };
+    this.research.abilities = (this.research.abilities || []).filter((a) => ABILITY[a]);
     for (const [id, st] of Object.entries(s.units || {})) {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
+      if (st.c) {
+        const c = st.c; if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if (WEAPON[c.w]) u.weapon = c.w;
+        if (Number.isInteger(c.pool) && c.pool >= 40 && c.pool <= 50) u.pool = c.pool;
+        u.traits = (c.traits || []).filter((t, i, a) => TRAIT[t] && a.indexOf(t) === i); u.used = Math.max(c.used || 0, u.traits.length);
+        u.eq = (c.eq || []).filter((t) => u.traits.includes(t)).slice(0, MAX_TRAITS); u.ab = (c.ab || []).filter((a) => this.research.abilities.includes(a)).slice(0, MAX_ABILITIES);
+        const al = emptyAlloc(); let left = u.pool; for (const { k } of CSTATS) { const v = Math.max(0, Math.min(STAT_MAX, Math.floor(c.alloc?.[k] || 0), left)); al[k] = v; left -= v; } u.alloc = al;
+      }
       if (st.mode === 'mission' && st.mission && st.phase !== 'back') { u.mode = 'mission'; u.phase = 'away'; u.mission = st.mission; u.away = true; }
       else if (st.mode === 'patrol' && st.patrol) { u.mode = 'patrol'; u.patrol = st.patrol; const wp = PATROLS[u.patrol.id][0]; u.place(wp[0], wp[1]); u.patrol.wi = 0; const p = findPath(u.tx, u.ty, PATROLS[u.patrol.id][1][0], PATROLS[u.patrol.id][1][1]); u.path = p || []; u.patrol.wi = 1; }
       else { u.mode = 'idle'; const sp = this.spot(u.home); u.place(sp[0], sp[1]); }
     }
+    this.refresh();
   }
 }
 export { DEPTS, DEPT, ROOMS };

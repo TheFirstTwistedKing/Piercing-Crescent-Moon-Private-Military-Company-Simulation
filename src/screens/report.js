@@ -36,8 +36,8 @@ export function mountReport(root, ctx) {
       section('05', '부상자', r.injured.length ? h('p', {}, r.injured.map((i) => `${i.name} (HP ${i.hp})`).join(', ')) : h('p', { class: 'hint' }, '없음')));
     const side = h('aside', { class: 'rside' },
       submitted
-        ? h('div', { class: 'done' }, h('p', { class: 'eyebrow' }, 'DONE'), h('h2', {}, '제출 완료'), h('p', {}, `DAY ${pad(sim.day)} 가 개시되었습니다. 시간은 정지 상태입니다.`), h('button', { class: 'btn primary', type: 'button', onclick: () => ctx.go('#/panel') }, '메인 패널로'))
-        : h('div', {}, h('p', { class: 'eyebrow' }, 'SUBMIT'), h('h2', {}, '하루를 마감합니다'), h('p', { class: 'lede' }, '제출하면 오늘의 기록이 저장되고, 모든 인원이 각자의 방으로 복귀하며 다음 날이 시작됩니다.'),
+        ? h('div', { class: 'done' }, h('p', { class: 'eyebrow' }, 'DONE'), h('h2', {}, '제출 완료'), h('p', {}, `DAY ${pad(sim.day)} 가 개시되었습니다. 시간은 정지 상태입니다.`), h('p', { class: 'note' }, `연구 포인트 +1 (보유 ${sim.research.points})`), h('button', { class: 'btn primary', type: 'button', onclick: () => ctx.go('#/panel') }, '메인 패널로'))
+        : h('div', {}, h('p', { class: 'eyebrow' }, 'SUBMIT'), h('h2', {}, '하루를 마감합니다'), h('p', { class: 'lede' }, '제출하면 오늘의 기록이 저장되고, 모든 인원이 각자의 방으로 복귀하며 다음 날이 시작됩니다. 연구 포인트 +1을 얻습니다.'),
           h('button', { class: 'btn primary lg', type: 'button', onclick: submit }, '오늘의 보고서 올리기')),
       h('div', { class: 'past-wrap' }, h('h4', {}, '지난 보고서'), past));
     wrap.replaceChildren(head, h('div', { class: 'report-body' }, doc, side));

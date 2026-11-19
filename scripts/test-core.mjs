@@ -4,7 +4,12 @@ import { hashSecret, verifySecret, makeRecoveryCodes, normalizeRecovery } from '
 import { findPath, PATROLS, ROOMS, roomFreeTiles, roomDoorTile, isSolid, GATE, CAMERAS, MW, MH } from '../src/game/map.js';
 import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChance } from '../src/game/sim.js';
 import { nickKey, nickProblem } from '../src/core/nick.js';
-import { ROSTER, DEPTS, MISSIONS, MISSION } from '../src/game/data.js';
+import { TRAITS, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
+import { HAIR_STYLES } from '../src/game/hair.js';
+import { WEAPONS } from '../src/game/weapons.js';
+import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
+import { RESEARCH, RESEARCH_BY_KEY } from '../src/game/research.js';
+import { ROSTER, DEPTS, MISSIONS, MISSION, MONO } from '../src/game/data.js';
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
 
@@ -103,5 +108,82 @@ await t('저장 복원: 임무 중이던 인원은 정문 밖(away)에서 이어
 await t('성공 확률: 같은 부서·높은 스탯이 더 높고 범위 [0.05,0.97]', () => {
   const s = new Sim(); const a = successChance(s.byId.c04, MISSION.rg2), b = successChance(s.byId.c13, MISSION.rg2);
   assert.ok(a > b); for (const u of s.units) for (const m of MISSIONS) { const p = successChance(u, m); assert.ok(p >= 0.05 && p <= 0.97); }
+});
+
+await t('커스터마이징 데이터: 머리 남/여 10개, 무기 12종, 특성 20/20/20, 능력 5, 스탯 6', () => {
+  assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 10); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 10);
+  assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '배틀엑스']);
+  for (const r of ['c', 'r', 'l']) assert.equal(TRAITS.filter((x) => x.rarity === r).length, 20, r);
+  assert.ok(TRAITS.filter((x) => x.rarity === 'l' && x.bad).length >= 3, '순수하게 나쁜 전설 특성');
+  assert.ok(TRAITS.filter((x) => x.rarity === 'l' && !x.bad).length >= 10, '좋은 전설 특성도 존재');
+  assert.equal(new Set(TRAITS.map((x) => x.id)).size, 60); assert.deepEqual(ABILITIES.map((a) => a.name), ['원격 감지', '드래곤', '카피캣', '괴력', '은신']);
+  assert.deepEqual(CSTATS.map((c) => c.ko), ['근력', '방어력', '기술', '카리스마', '매력', '지혜']);
+  assert.ok(Math.abs(GACHA_ODDS.c + GACHA_ODDS.r + GACHA_ODDS.l - 1) < 1e-9 && GACHA_ODDS.c > GACHA_ODDS.r && GACHA_ODDS.r > GACHA_ODDS.l);
+  for (const tr of TRAITS) assert.ok(fxLines(tr.fx).length > 0, tr.id);
+});
+await t('스탯 포인트: 캐릭터마다 40~50, 각 스탯 최대 10, 총합은 풀 이내', () => {
+  const s = new Sim(null, Math.random); const pools = new Set();
+  for (const u of s.units) { pools.add(u.pool); assert.ok(u.pool >= 40 && u.pool <= 50, u.id); assert.equal(sumAlloc(u.alloc), u.pool, '기본 추천 배분은 풀을 모두 사용'); for (const { k } of CSTATS) assert.ok(u.alloc[k] >= 0 && u.alloc[k] <= 10); }
+  assert.ok(pools.size > 1, '풀이 캐릭터마다 랜덤');
+  const u = s.byId.c04; s.resetStats('c04'); assert.equal(sumAlloc(u.alloc), 0);
+  assert.equal(s.setStat('c04', 'str', 99).value, 10, '최대 10'); assert.equal(s.setStat('c04', 'def', 10).value, 10);
+  for (const k of ['skl', 'cha', 'chm', 'wis']) s.setStat('c04', k, 10);
+  assert.ok(sumAlloc(u.alloc) <= u.pool, '풀 초과 불가'); assert.equal(sumAlloc(u.alloc), Math.min(u.pool, 60));
+  const r = new Sim(null, () => 0); assert.equal(r.units[0].pool, 40); const r2 = new Sim(null, () => 0.999999); assert.equal(r2.units[0].pool, 50);
+  for (const d of DEPTS) for (const pool of [40, 45, 50]) { const a = autoAlloc(pool, d.key); assert.equal(sumAlloc(a), pool); }
+});
+await t('특성 뽑기: 10회 제한, 확률 70/25/5, 중복 없음, 장착 3개 제한, 효과 반영', () => {
+  const s = new Sim(null, Math.random); const u = s.byId.c05;
+  for (let i = 0; i < 10; i++) assert.ok(s.pullTrait('c05').ok, `${i + 1}번째`);
+  assert.equal(s.pullTrait('c05').ok, false); assert.equal(u.traits.length, 10); assert.equal(new Set(u.traits).size, 10);
+  // 확률 검증(대량 시뮬레이션): 독립 Sim 으로 많이 뽑는다
+  const cnt = { c: 0, r: 0, l: 0 }; let n = 0;
+  for (let i = 0; i < 4000; i++) { const x = new Sim(null, Math.random); for (let k = 0; k < 10; k++) { const res = x.pullTrait('c01'); cnt[res.trait.rarity]++; n++; } }
+  assert.ok(Math.abs(cnt.c / n - 0.7) < 0.03, '일반 ' + cnt.c / n); assert.ok(Math.abs(cnt.r / n - 0.25) < 0.03, '희귀 ' + cnt.r / n); assert.ok(Math.abs(cnt.l / n - 0.05) < 0.02, '전설 ' + cnt.l / n);
+  const v = new Sim(null, Math.random), w = v.byId.c10; w.traits = ['c04', 'r01', 'l01', 'l11']; w.used = 4;
+  assert.ok(v.toggleTrait('c10', 'c04').ok && v.toggleTrait('c10', 'r01').ok && v.toggleTrait('c10', 'l01').ok); assert.equal(v.toggleTrait('c10', 'l11').ok, false, '3개 초과');
+  assert.equal(v.toggleTrait('c10', 'c01').ok, false, '미보유'); assert.ok(w.fx.str >= 3 + 1 + 2 - 0, 'str 합산');
+});
+await t('연구: 보고서마다 +1, 능력 10pt, 3배속 해금, 수입 +0.5%·비용 2씩 증가(20단계), 능력 장착', () => {
+  const s = new Sim(null, Math.random); assert.equal(s.research.points, 0);
+  assert.equal(s.doResearch('ab:dragon').ok, false, '포인트 부족'); assert.equal(s.toggleAbility('c04', 'dragon').ok, false, '미연구 능력 장착 불가');
+  s.setSpeed(3); assert.equal(s.speed, 2, '3배속은 잠김');
+  s.research.points = 1000;
+  const costs = []; for (let i = 0; i < 20; i++) { costs.push(s.researchState('income').cost); assert.ok(s.doResearch('income').ok); }
+  assert.deepEqual(costs, Array.from({ length: 20 }, (_, i) => 2 * (i + 1)), '비용이 2씩 증가'); assert.equal(s.doResearch('income').ok, false, '21번째 불가'); assert.ok(Math.abs(s.incomeMult() - 1.1) < 1e-9);
+  assert.equal(RESEARCH.filter((r) => r.kind === 'ability').length, 5); for (const r of RESEARCH.filter((r) => r.kind === 'ability')) assert.equal(r.cost(0), 10);
+  const before = s.research.points; assert.ok(s.doResearch('speed3').ok); assert.equal(before - s.research.points, 5); s.setSpeed(3); assert.equal(s.speed, 3);
+  for (const a of ['remote', 'dragon', 'copycat', 'might', 'stealth']) assert.ok(s.doResearch('ab:' + a).ok);
+  assert.ok(s.toggleAbility('c04', 'dragon').ok && s.toggleAbility('c04', 'might').ok); assert.equal(s.toggleAbility('c04', 'stealth').ok, false, '능력 2개 제한');
+  assert.ok(s.byId.c04.fx.str >= 7 && s.byId.c04.fx.upkeep === 400);
+  // 보고서 → 연구 포인트 +1
+  const t2 = new Sim(null, Math.random); t2.setSpeed(2); for (let i = 0; i < 5; i++) t2.update(0.1); const rep = t2.buildReport(); t2.nextDay(rep); assert.equal(t2.research.points, 1); assert.equal(rep.researchPoints, 1);
+});
+await t('효과 반영: 카피캣·무기·특성이 성공률/보상/이동속도/유지비에 영향', () => {
+  const s = new Sim(null, Math.random); const u = s.byId.c06; const m = MISSION.rg3; assert.ok(s.chance(u, m) < 0.9, '상한에 걸리지 않는 조건');
+  const base = s.chance(u, m); u.traits = ['r07']; u.eq = ['r07']; s.refresh(); assert.ok(s.chance(u, m) > base, '베테랑 성공률 ↑');
+  u.traits = ['l16']; u.eq = ['l16']; s.refresh(); assert.ok(s.chance(u, m) < base, '불운의 별 성공률 ↓');
+  u.eq = []; u.traits = []; s.setWeapon('c06', 'greatsword'); assert.ok(u.fx.speed < 0 && u.fx.str === 3);
+  // 카피캣: 같은 부서 최고 스탯의 70%
+  const c = s.byId.c04, mate = s.byId.c05; s.resetStats('c04'); s.resetStats('c05'); s.setStat('c05', 'wis', 10); s.research.abilities.push('copycat'); assert.ok(s.toggleAbility('c04', 'copycat').ok);
+  assert.equal(c.cs.wis, 7, '10 의 70%');
+  // 유지비·보상
+  const v = new Sim(null, () => 0.5); v.byId.c01.eq = []; const up0 = v.buildReport(true).upkeep; v.byId.c01.ab = []; v.research.abilities.push('dragon'); v.toggleAbility('c01', 'dragon'); assert.equal(v.buildReport(true).upkeep - up0, 400);
+  // 수입 증가 반영
+  const a = new Sim(null, () => 0.01), b = new Sim(null, () => 0.01); b.research.income = 20; for (const x of [a, b]) { x.byId.c10.mission = { id: 'rq1', remaining: 0 }; x.finishMission(x.byId.c10); }
+  assert.ok(b.funds > a.funds, '수입 증가');
+});
+await t('저장/복원: 커스터마이징·특성·연구가 유지되고 잘못된 값은 걸러진다', () => {
+  const s = new Sim(null, Math.random); s.setHair('c04', 'f6', '#ff00aa'); s.setWeapon('c04', 'rapier'); s.setStat('c04', 'str', 4); s.byId.c04.traits = ['c01', 'r02']; s.byId.c04.used = 2; s.toggleTrait('c04', 'r02'); s.research.points = 7; s.research.abilities = ['might']; s.toggleAbility('c04', 'might');
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, Math.random); const u = x.byId.c04;
+  assert.equal(u.look.hairStyle, 'f6'); assert.equal(u.look.hair, '#ff00aa'); assert.equal(u.weapon, 'rapier'); assert.equal(u.alloc.str, s.byId.c04.alloc.str); assert.equal(u.pool, s.byId.c04.pool);
+  assert.deepEqual(u.eq, ['r02']); assert.deepEqual(u.ab, ['might']); assert.equal(x.research.points, 7); assert.equal(u.used, 2);
+  snap.units.c04.c = { hs: 'zz', hc: 'red', w: 'laser', pool: 999, alloc: { str: 99, def: 99, skl: 99, cha: 99, chm: 99, wis: 99 }, used: 0, traits: ['nope', 'c01', 'c01'], eq: ['c01', 'x', 'c02', 'r01', 'r02'], ab: ['dragon'] };
+  const y = new Sim(snap, Math.random).byId.c04; assert.equal(y.look.hairStyle, 'f6'.length ? y.look.hairStyle : ''); assert.ok(y.pool >= 40 && y.pool <= 50); assert.ok(sumAlloc(y.alloc) <= y.pool); assert.deepEqual(y.traits, ['c01']); assert.deepEqual(y.eq, ['c01']); assert.deepEqual(y.ab, []);
+  const old = new Sim({ v: 1, day: 3, clock: 10, funds: 5, units: { c04: { hp: 50, mor: 50, home: 'rager', mode: 'idle' } } }, Math.random); assert.equal(old.day, 3); assert.equal(old.byId.c04.hp, 50, '옛 저장 파일도 로드');
+});
+await t('혼잣말: 초승달 없는 새 대사 10개 추가', () => {
+  assert.equal(MONO.generic.length, 14); assert.equal(MONO.generic.filter((x) => x.includes('초승달')).length, 1, '기존 1개만 유지');
+  assert.equal(new Set(MONO.generic).size, 14);
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
