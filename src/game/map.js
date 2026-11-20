@@ -1,5 +1,6 @@
 // 기지 타일맵: 56×36 타일(타일 16px). 8개 부서 방 + 중앙 복도 + 마당/울타리/정문.
 // 정적 레이어는 한 번만 캔버스에 구워 두고(renderStatic), 이후 프레임에서는 복사만 한다.
+import { RES } from './res.js';
 export const TS = 16;
 export const MW = 56, MH = 36;
 export const WORLD_W = MW * TS, WORLD_H = MH * TS;
@@ -220,10 +221,13 @@ export function findPath(sx, sy, tx, ty) {
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const R = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x | 0, y | 0, w | 0, h | 0); };
 
+// 반 칸(실제 1픽셀) 단위로 그리는 도우미: 좌표·크기를 0.5 단위로 맞춘다.
+const R2 = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(Math.round(x * 2) / 2, Math.round(y * 2) / 2, Math.max(0.5, Math.round(w * 2) / 2), Math.max(0.5, Math.round(h * 2) / 2)); };
+
 export function renderStatic() {
-  const cv = document.createElement('canvas'); cv.width = WORLD_W; cv.height = WORLD_H;
-  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
-  const rnd = rng(7);
+  const cv = document.createElement('canvas'); cv.width = WORLD_W * RES; cv.height = WORLD_H * RES;
+  const c = cv.getContext('2d', { willReadFrequently: true }); c.imageSmoothingEnabled = false; c.setTransform(RES, 0, 0, RES, 0, 0);
+  const rnd = rng(7), rn2 = rng(913);
   const roomAt = (x, y) => Object.entries(ROOMS).find(([, r]) => x > r.x && x < r.x + r.w - 1 && y > r.y && y < r.y + r.h - 1)?.[0];
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
     const k = floorKind[idx(x, y)], px = x * TS, py = y * TS, a = (x + y) % 2 === 0;
@@ -252,6 +256,30 @@ export function renderStatic() {
       }
     }
   }
+  // ── 반 칸 단위 바닥 디테일: 풀잎·자갈·타일 이음매·판자 결·콘크리트 얼룩 (칸마다 정해진 난수라 매번 같은 모양)
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const k = floorKind[idx(x, y)], px = x * TS, py = y * TS;
+    if (k === 0) {
+      for (let i = 0; i < 4; i++) R2(c, rn2() < 0.55 ? '#2b3a2e' : '#141c16', px + rn2() * 15.5, py + rn2() * 15, 0.5, rn2() < 0.4 ? 1 : 0.5);
+      if (rn2() < 0.14) { const sx = px + 1 + rn2() * 13, sy = py + 1 + rn2() * 13; R2(c, '#3a3d3a', sx, sy, 1, 0.5); R2(c, '#171a18', sx, sy + 0.5, 1, 0.5); }
+      if ((x === 27 || x === 28) && y > 31) { for (let i = 0; i < 6; i++) R2(c, rn2() < 0.5 ? '#2c2a27' : '#1a1917', px + rn2() * 15, py + rn2() * 15, 1, 0.5); if (x === 28 && y % 2 === 0) R2(c, '#6c5b30', px - 0.5, py + 3, 1, 7); }
+    } else if (k === 1) {
+      R2(c, '#312a22', px, py, TS, 0.5); R2(c, '#171109', px + TS - 0.5, py, 0.5, TS - 1);
+      for (let i = 0; i < 2; i++) R2(c, rn2() < 0.5 ? '#2c251d' : '#17120d', px + 1 + rn2() * 13, py + 1 + rn2() * 13, 1 + rn2() * 2, 0.5);
+      if (rn2() < 0.06) { const sx = px + 2 + rn2() * 10, sy = py + 2 + rn2() * 10; R2(c, '#120d08', sx, sy, 3, 0.5); R2(c, '#120d08', sx + 2.5, sy + 0.5, 1.5, 0.5); }
+    } else if (k === 2) {
+      const room = roomAt(x, y), concrete = room === 'aerial' || room === 'carrier' || room === 'rager';
+      if (concrete) {
+        R2(c, '#323230', px, py, TS, 0.5); R2(c, '#171716', px + TS - 0.5, py, 0.5, TS - 1);
+        for (let i = 0; i < 3; i++) R2(c, rn2() < 0.5 ? '#343432' : '#1a1a19', px + 1 + rn2() * 13.5, py + 1 + rn2() * 13.5, 0.5 + (rn2() < 0.4 ? 1 : 0), 0.5);
+        if (rn2() < 0.05) { const sx = px + 3 + rn2() * 9, sy = py + 3 + rn2() * 9; R2(c, '#121211', sx, sy, 2.5, 0.5); R2(c, '#121211', sx + 2, sy + 0.5, 1.5, 0.5); }
+      } else {
+        for (const off of [6.5, 14.5]) R2(c, '#3b2e22', px, py + off, TS, 0.5);
+        for (let i = 0; i < 3; i++) { const row = i % 2 ? 8 : 0; R2(c, rn2() < 0.5 ? '#35291e' : '#1b140f', px + 0.5 + rn2() * 11, py + row + 1 + rn2() * 5, 2 + rn2() * 3, 0.5); }
+        R2(c, '#120e0b', px + 1, py + 3.5, 0.5, 0.5); R2(c, '#120e0b', px + 14.5, py + 11.5, 0.5, 0.5);
+      }
+    }
+  }
   // 울타리
   const fence = (x, y, horiz) => { const px = x * TS, py = y * TS; R(c, PAL.fence, px, py + (horiz ? 6 : 0), horiz ? TS : 3, horiz ? 3 : TS); R(c, '#2c2c29', px, py + (horiz ? 9 : 0), horiz ? TS : 1, horiz ? 1 : TS); if (horiz && x % 2 === 0) R(c, '#6a6a64', px + 2, py + 3, 2, 9); if (!horiz && y % 2 === 0) R(c, '#6a6a64', px - 1, py + 2, 5, 2); };
   for (let x = 0; x < MW; x++) { if (x !== GATE.x && x !== GATE.x + 1) fence(x, 0, true), fence(x, MH - 1, true); }
@@ -270,15 +298,44 @@ export function renderStatic() {
     if (left) R(c, '#2a2019', px, py, 2, TS);
     if (right) R(c, '#120d0a', px + TS - 2, py, 2, TS);
   }
+  // 벽 디테일: 벽돌 줄눈·윗면 하이라이트·금테 반짝임
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    if (floorKind[idx(x, y)] !== 3) continue;
+    const px = x * TS, py = y * TS, below = !isSolidWall(x, y + 1), above = !isSolidWall(x, y - 1);
+    if (below) {
+      R2(c, '#4d3d30', px, py, TS, 0.5); R2(c, '#33271d', px, py + 3, TS, 0.5); R2(c, '#33271d', px, py + 7, TS, 0.5); R2(c, '#15100c', px, py + 7.5, TS, 0.5);
+      R2(c, '#33271d', px + 3.5 + (x % 2) * 2, py + 3.5, 0.5, 3.5); R2(c, '#33271d', px + 11.5 - (x % 2) * 2, py + 3.5, 0.5, 3.5); R2(c, '#33271d', px + 7.5, py + 7.5, 0.5, 3.5); R2(c, '#33271d', px - 0.5 + 0.5, py + 7.5, 0.5, 3.5);
+      if ((x * 5 + y) % 3 === 0) R2(c, '#f0d48a', px + 4 + (x % 4) * 2, py + 12, 1.5, 0.5);
+    } else if (above) R2(c, '#4a3b2e', px, py, TS, 0.5);
+  }
   // 문 금장식(세로 금테) — 첨부 스타일 참고
   const doorTrim = (x, y, w) => { const px = x * TS, py = y * TS; for (const dx of [-3, w * TS + 1]) { R(c, '#3a2b18', px + dx, py - 2, 3, TS + 4); R(c, PAL.gold, px + dx + 1, py - 2, 1, TS + 4); } };
   for (const r of Object.values(ROOMS)) doorTrim(r.doorX, r.doorY, 2);
   for (const x of [4, 51]) { const px = x * TS; R(c, '#3a2b18', px, 16 * TS + 8, TS, 3); R(c, PAL.gold, px, 16 * TS + 9, TS, 1); R(c, '#3a2b18', px, 19 * TS + 5, TS, 3); R(c, PAL.gold, px, 19 * TS + 6, TS, 1); }
 
-  for (const o of objects) drawObject(c, o);
+  for (const o of objects) {
+    if (o.type !== 'pad') { const x = o.x * TS, y = o.y * TS, w = o.w * TS, h = o.h * TS; R2(c, 'rgba(0,0,0,.28)', x + 1, y + h - 1, w, 2.5); R2(c, 'rgba(0,0,0,.2)', x + w, y + 3, 2, h - 2); }
+    drawObject(c, o);
+  }
+  edgePass(c);
   // 방 이름 바닥 표식(희미한 선) — 방 구분용
   c.fillStyle = 'rgba(201,162,74,.05)';
   return cv;
+}
+// 마감: 밝기 차가 큰 경계에서 밝은 쪽 위/왼쪽 가장자리를 살짝 밝히고, 어두운 쪽 아래/오른쪽 가장자리를 살짝 어둡게 한다.
+// → 가구·벽·울타리에 반 칸 두께의 입체감(테두리)이 생긴다. 한 번만 계산해 정적 레이어에 굽는다.
+function edgePass(c) {
+  const W = WORLD_W * RES, H = WORLD_H * RES, img = c.getImageData(0, 0, W, H), d = img.data, src = new Uint8ClampedArray(d);
+  const lum = (i) => src[i] * 0.3 + src[i + 1] * 0.59 + src[i + 2] * 0.11;
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = (y * W + x) * 4, l = lum(i), up = lum(i - W * 4), lf = lum(i - 4), dn = lum(i + W * 4), rt = lum(i + 4);
+    let t = 0;
+    if (l - up > 16) t += 0.16; if (l - lf > 22) t += 0.08;       // 위·왼쪽이 더 어두움 → 이 픽셀은 밝은 면의 시작: 살짝 밝게
+    if (dn - l > 16) t -= 0.22; if (rt - l > 22) t -= 0.12;       // 아래·오른쪽이 더 밝음 → 이 픽셀은 어두운 면의 끝: 살짝 어둡게
+    if (t > 0) { d[i] += (255 - d[i]) * t; d[i + 1] += (255 - d[i + 1]) * t; d[i + 2] += (255 - d[i + 2]) * t; }
+    else if (t < 0) { d[i] *= 1 + t; d[i + 1] *= 1 + t; d[i + 2] *= 1 + t; }
+  }
+  c.putImageData(img, 0, 0);
 }
 const isSolidWall = (x, y) => inBounds(x, y) && floorKind[idx(x, y)] === 3;
 

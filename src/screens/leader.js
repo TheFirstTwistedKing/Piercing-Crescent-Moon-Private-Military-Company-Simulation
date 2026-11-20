@@ -4,10 +4,10 @@ import { engine } from '../game/engine.js';
 import { DEPTS, DEPT } from '../game/data.js';
 import { AFF_MAX, REQUEST_COST } from '../game/leaders.js';
 import { WEATHERS } from '../game/weather.js';
-import { drawPreview } from '../game/sprites.js';
+import { drawPreview, SW, SH, CW, CH, PAD } from '../game/sprites.js';
 import { h, icon } from '../core/ui.js';
 
-const portrait = (u, scale, dir = 'down') => { const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 24, className: 'px' }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; drawPreview(c, u, { dir }); cv.style.width = 32 * scale + 'px'; cv.style.height = 24 * scale + 'px'; return cv; };
+const portrait = (u, scale, dir = 'down') => { const cv = Object.assign(document.createElement('canvas'), { width: SW, height: SH, className: 'px' }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; drawPreview(c, u, { dir }); cv.style.width = (CW + PAD * 2) * scale + 'px'; cv.style.height = (CH + PAD * 2) * scale + 'px'; return cv; };
 
 export function mountLeader(root, ctx, arg) {
   const sim = engine.sim;

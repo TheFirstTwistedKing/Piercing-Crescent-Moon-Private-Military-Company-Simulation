@@ -1,7 +1,7 @@
 // 공방 무기 90개: 3개 공방 × 18가지 무기 종류(근접 12 + 총기 6). 종류마다 5개이며 무기마다 모양(도트)이 모두 다르다. (티어 번호 없음)
 // 착용할 때 착용비(fee)를 한 번 내고, 착용하는 동안 매일 유지비(upkeep)가 운영비에 더해진다.
 // pw 는 화면에 표시되지 않는 내부 강도(1~5): 성능·착용비·유지비를 정하는 데만 쓰인다.
-import { swordPixels, headPixels, gridPixels, toRects, gunPixels, PALETTES, GUN_PALETTES } from './weapon-art.js';
+import { swordPixels, headPixels, gridPixels, toRects, gunArt, PALETTES, GUN_PALETTES } from './weapon-art.js';
 
 export const WORKSHOPS = [
   { id: 'magma', name: '마그마 인더스트리 공방', short: '마그마', color: '#e0702a', desc: '지열로 벼린 중화기 공방. 흑요석처럼 검은 날에 용암 균열이 흐른다. 근력과 파괴력에 특화됐지만 둔해지고, 강한 무기는 열기로 한파를 막아 준다.' },
@@ -151,7 +151,7 @@ function hints(o) {   // 검류 외형 설명(자동)
 function buildArt(a) {
   if (a.k === 'sword') return { kind: 'hand', rects: toRects(swordPixels(a.o)) };
   if (a.k === 'head') return { kind: 'hand', rects: toRects(headPixels(a)) };
-  if (a.k === 'gun') return { kind: 'gun', px: gunPixels(a.o) };
+  if (a.k === 'gun') return gunArt(a.o);
   return { kind: a.k, px: gridPixels(a.rows), w: Math.max(...a.rows.map((r) => r.length)), h: a.rows.length };   // shield | gauntlet
 }
 

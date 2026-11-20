@@ -4,7 +4,7 @@ import { engine } from '../game/engine.js';
 import { fmtCredits } from '../game/sim.js';
 import { DEPT } from '../game/data.js';
 import { WEAPON } from '../game/weapons.js';
-import { drawPreview } from '../game/sprites.js';
+import { drawPreview, SW, SH, CW, CH, PAD } from '../game/sprites.js';
 import { fxLines } from '../game/traits.js';
 import { h, icon, modal } from '../core/ui.js';
 
@@ -16,7 +16,7 @@ export function mountRecruit(root, ctx) {
   let saveT = 0;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => engine.save(), 1200); };
   const funds = h('b', { class: 'shop-funds' }), body = h('div', { class: 'rc-body' });
-  const portrait = (c, scale = 4) => { const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 24, className: 'px rc-portrait', 'aria-hidden': 'true' }); const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; drawPreview(g, c, { dir: 'down', frame: 0 }); cv.style.width = `${32 * scale}px`; cv.style.height = `${24 * scale}px`; return cv; };
+  const portrait = (c, scale = 4) => { const cv = Object.assign(document.createElement('canvas'), { width: SW, height: SH, className: 'px rc-portrait', 'aria-hidden': 'true' }); const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; drawPreview(g, c, { dir: 'down', frame: 0 }); cv.style.width = `${(CW + PAD * 2) * scale}px`; cv.style.height = `${(CH + PAD * 2) * scale}px`; return cv; };
 
   const act = (fn, okSound = 'confirm') => { const r = fn(); if (!r.ok) { Audio.sfx('error'); ctx.toast(r.reason, 'bad'); return r; } Audio.sfx(okSound); save(); paint(); return r; };
 

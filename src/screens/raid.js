@@ -2,7 +2,8 @@
 // 메인 패널 계열 화면에서만 동작하며, 습격은 닫을 수 없다(결판을 내야 시간이 다시 흐른다).
 import * as Audio from '../core/audio.js';
 import { engine } from '../game/engine.js';
-import { getSheet, CW, CH, OX, DIR_INDEX } from '../game/sprites.js';
+import { drawCellAt, finishCanvas, OX } from '../game/sprites.js';
+import { RES } from '../game/res.js';
 import { ARENA, ENEMY_TYPES, FORMATIONS, ABILITY_INFO } from '../game/raid.js';
 import { DEPTS } from '../game/data.js';
 import { fmtCredits, clockInfo } from '../game/sim.js';
@@ -17,20 +18,22 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const eCache = {};
 function enemySprite(type, dir) {
   const k = type + dir; if (eCache[k]) return eCache[k];
-  const c = Object.assign(document.createElement('canvas'), { width: 24, height: 28 }), g = c.getContext('2d'), R = (col, x, y, w, hh) => { g.fillStyle = col; g.fillRect(x, y, w, hh); };
+  const c = Object.assign(document.createElement('canvas'), { width: 26 * RES, height: 30 * RES }), g = c.getContext('2d', { willReadFrequently: true }), R = (col, x, y, w, hh) => { g.fillStyle = col; g.fillRect(x, y, w, hh); };
+  g.setTransform(RES, 0, 0, RES, 0, 0); g.translate(1, 1);   // 2배 해상도 + 외곽선용 1칸 여백
   if (dir === 'right') { g.translate(24, 0); g.scale(-1, 1); }
   const skin = '#c99a76', boot = '#15110f';
   if (type === 'grunt') { R(boot, 8, 24, 3, 3); R(boot, 12, 24, 3, 3); R('#2b2320', 8, 19, 7, 6); R('#5a3f2a', 7, 11, 9, 9); R('#3a281b', 7, 11, 9, 2); R(skin, 8, 4, 7, 7); R('#a5382a', 8, 4, 7, 2); R('#15110f', 9, 7, 1, 1); R('#15110f', 12, 7, 1, 1); R('#6a4a2a', 3, 8, 2, 12); R('#8a8a90', 2, 6, 4, 3); }
   else if (type === 'brute') { R(boot, 7, 24, 4, 3); R(boot, 13, 24, 4, 3); R('#241c18', 7, 19, 10, 6); R('#3a3a40', 5, 10, 14, 10); R('#26262b', 5, 10, 14, 2); R(skin, 8, 3, 8, 7); R('#15110f', 9, 6, 1, 1); R('#15110f', 13, 6, 1, 1); R('#2a2018', 8, 3, 8, 2); R('#6a4a2a', 1, 5, 2, 18); R('#9a9aa2', 0, 3, 6, 6); R('#4a4a50', 0, 3, 6, 1); }
   else if (type === 'archer') { R(boot, 9, 24, 2, 3); R(boot, 12, 24, 2, 3); R('#2c3a2a', 8, 12, 7, 12); R('#1d2a1c', 8, 12, 2, 12); R('#2c3a2a', 7, 3, 9, 9); R(skin, 9, 6, 5, 5); R('#15110f', 10, 8, 1, 1); R('#15110f', 12, 8, 1, 1); R('#6a4a2a', 3, 7, 1, 14); R('#c8c0a0', 4, 8, 1, 12); }
   else { R(boot, 7, 24, 4, 3); R(boot, 13, 24, 4, 3); R('#1a1a1f', 6, 11, 12, 13); R('#7a1d18', 4, 12, 3, 13); R('#2a2a30', 6, 11, 12, 2); R(skin, 8, 3, 8, 7); R('#15110f', 9, 6, 1, 1); R('#15110f', 13, 6, 1, 1); R('#2a2a30', 7, 1, 2, 4); R('#2a2a30', 15, 1, 2, 4); R('#8a1f18', 8, 3, 8, 2); R('#6a4a2a', 1, 6, 2, 17); R('#b0b0b8', 0, 3, 6, 7); R('#7a1d18', 0, 3, 6, 1); }
+  finishCanvas(g, c.width, c.height);
   return (eCache[k] = c);
 }
 const ESCALE = { grunt: 1, archer: 1, brute: 1.2, boss: 1.45 };
 const FX_COLOR = { dmg: '#e6eef8', hurt: '#ff8a70', heal: '#8fe3b8', skill: '#ffb23e', down: '#9aa6b4' };
 
 function drawArena(g, b, t) {
-  g.clearRect(0, 0, GW, GH); g.imageSmoothingEnabled = false;
+  g.setTransform(RES, 0, 0, RES, 0, 0); g.clearRect(0, 0, GW, GH); g.imageSmoothingEnabled = false;
   for (let y = 0; y < ARENA.h; y++) for (let x = 0; x < ARENA.w; x++) { g.fillStyle = (x + y) % 2 ? '#1c231f' : '#1f2722'; g.fillRect(x * TILE, 24 + y * TILE - 8, TILE, TILE); }
   g.fillStyle = '#0d1014'; g.fillRect(0, 0, GW, 18); g.fillStyle = '#d8b45a'; g.fillRect(0, 18, GW, 1);               // 기지 외벽(왼쪽 위 장식선)
   g.fillStyle = '#4a4a46'; g.fillRect(GW - 5, 24, 3, GH - 24); g.fillStyle = '#6a6a64'; for (let y = 28; y < GH; y += 18) g.fillRect(GW - 6, y, 5, 2);   // 오른쪽: 울타리(무법자가 들어온 쪽)
@@ -39,8 +42,8 @@ function drawArena(g, b, t) {
     const px = u.x * TILE, py = 24 + u.y * TILE - 8, ratio = u.maxhp ? Math.max(0, u.hp) / u.maxhp : 0, dead = u.hp <= 0, moving = (u._px !== undefined) && (Math.abs(u._px - u.x) + Math.abs(u._py - u.y) > 0.001); u._px = u.x; u._py = u.y;
     g.save(); g.globalAlpha = dead ? 0.3 : 1;
     g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(Math.round(px - 5), Math.round(py - 1), 10, 2);
-    if (u.side === 'd') { const ch = engine.sim.byId[u.id]; if (ch) g.drawImage(getSheet(ch), (moving ? [1, 0, 2, 0][Math.floor(t * 8) % 4] : 0) * CW, DIR_INDEX[u.dir === 'left' ? 'left' : 'right'] * CH, CW, CH, Math.round(px - 8 - OX), Math.round(py - 22 + (dead ? 5 : 0)), CW, CH); }
-    else { const s = ESCALE[u.type] || 1, spr = enemySprite(u.type, u.dir); g.drawImage(spr, 0, 0, 24, 28, Math.round(px - 12 * s), Math.round(py - 27 * s + (dead ? 5 : 0)), Math.round(24 * s), Math.round(28 * s)); }
+    if (u.side === 'd') { const ch = engine.sim.byId[u.id]; if (ch) drawCellAt(g, ch, moving ? [1, 0, 2, 0][Math.floor(t * 8) % 4] : 0, u.dir === 'left' ? 'left' : 'right', Math.round(px - 8 - OX), Math.round(py - 22 + (dead ? 5 : 0))); }
+    else { const s = ESCALE[u.type] || 1, spr = enemySprite(u.type, u.dir); g.drawImage(spr, 0, 0, spr.width, spr.height, Math.round(px - 12 * s) - s, Math.round(py - 27 * s + (dead ? 5 : 0)) - s, Math.round(26 * s), Math.round(30 * s)); }
     g.restore();
     if (!dead) {
       const w = u.side === 'e' && u.type === 'boss' ? 22 : 12, top = py - (u.side === 'e' ? 29 * (ESCALE[u.type] || 1) : 25);
@@ -86,7 +89,7 @@ function showPrep() {
 /* ───── 2. 전투 ───── */
 function startFight(formation) {
   const sim = engine.sim; battle = sim.raidBattle(formation); if (!battle || !card) return; phase = 'fight'; speed = 1; floats = [];
-  cv = Object.assign(document.createElement('canvas'), { width: GW, height: GH, className: 'rd-cv px', 'aria-label': '전투 장면' }); const g = cv.getContext('2d');
+  cv = Object.assign(document.createElement('canvas'), { width: GW * RES, height: GH * RES, className: 'rd-cv px', 'aria-label': '전투 장면' }); const g = cv.getContext('2d');
   bars = { d: h('i'), e: h('i'), dn: h('b'), en: h('b'), time: h('small') };
   const spd = h('div', { class: 'rd-speed' }, ...[1, 2, 4].map((v) => h('button', { type: 'button', class: `icon-btn ${v === speed ? 'on' : ''}`, 'data-v': v, onclick: (e) => { speed = v; Audio.sfx('click'); spd.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.v === v)); } }, `${v}x`)),
     h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { Audio.sfx('click'); battle.finish(); endFight(); } }, '결과 바로 보기'));
