@@ -133,8 +133,8 @@ function w3(cv, view) {
 
 // 긴 머리 공통: 줄마다 폭이 어깨쯤에서 살짝 넓어지고 끝으로 갈수록 좁아지는 커튼(덩어리) + 그 위에 결(가닥)·끝 가닥
 const taper = (v, vend, k = 0.32) => 1 - Math.max(0, (v - (vend - 9)) / 12) * k;
-function curtainFront(cv, sgn, v0, vend, amp = 0, ph = 0) {
-  cv.mass((v) => { const o = 5.3 + Math.max(0, wave(v, amp * 0.5, 0.3, ph)), w = (4.6 + wave(v, amp, 0.32, ph + 1) + Math.min(1.2, (v - v0) * 0.1) + (v > vend - 8 ? (v - (vend - 8)) * 0.12 : 0)) * taper(v, vend, 0.2); return [[sgn < 0 ? -(o + w) : o, sgn < 0 ? -o : o + w]]; }, v0, vend - 1, { dim: 0 });
+function curtainFront(cv, sgn, v0, vend, amp = 0, ph = 0, o_ = {}) {
+  cv.mass((v) => { const o = 5.3 + Math.max(0, wave(v, amp * 0.5, 0.3, ph)), w = (4.6 + wave(v, amp, 0.32, ph + 1) + Math.min(1.2, (v - v0) * 0.1) + (v > vend - 9 ? (v - (vend - 9)) * 0.28 : 0)) * taper(v, vend, 0.12); return [[sgn < 0 ? -(o + w) : o, sgn < 0 ? -o : o + w]]; }, v0, vend - 1, { dim: 0, accBelow: o_.tipFrom, streak: o_.streak, sheen: sgn * 8 });
 }
 function strandsFront(cv, vend, o) {
   fanSym(cv, { n: 3, x0: 6.2, y0: 5, x1: 8.4, y1: 6, a0: 92, a1: 86, len0: vend - 7, len1: vend - 5, curv: o.curv ?? 0, w: 3, taper: 0.5, wave: o.wave, accTip: o.accTip, seed: o.seed, jit: 4 });
@@ -149,14 +149,14 @@ function w4(cv, view) {
   if (view === 'down') {
     cv.mass(ell(0, 1, 9.4, 6.5), -6, 8, { clip: FACE_FRONT, dim: 0 });
     cv.mass(ell(0, -1, 7.2, 3.3), -4, 3, { acc: true, dim: 0 });
-    curtainFront(cv, -1, 4, VEND, 2.4, 0); curtainFront(cv, 1, 4, VEND, 2.4, 0);
+    curtainFront(cv, -1, 4, VEND, 2.6, 0, { tipFrom: VEND - 10 }); curtainFront(cv, 1, 4, VEND, 2.6, 0, { tipFrom: VEND - 10 });
     strandsFront(cv, VEND, { wave: { amp: 1.3, f: 0.55 }, accTip: 0.74, seed: 31 });
     cv.lock(-1.5, -3, 52, 13.5, 1.6, 3.6);
     fanSym(cv, { n: 2, x0: 1, y0: -2, x1: 3, y1: -2, a0: 100, a1: 88, len0: 5.5, len1: 5, curv: -1, w: 2.8, seed: 33 });
   } else if (view === 'up') {
     cv.mass(ell(0, 3, 9.6, 9.4), -6, 12, { dim: 0 });
     cv.mass(ell(0, -1, 7.4, 3.3), -4, 3, { acc: true, dim: 0 });
-    cv.mass((v) => { const w = (9.6 + wave(v, 2.0, 0.3) + (v > VEND - 8 ? (v - (VEND - 8)) * 0.15 : 0)) * taper(v, VEND, 0.2); return [[-w, w]]; }, 12, VEND - 1, { dim: 0 });
+    cv.mass((v) => { const w = (9.6 + wave(v, 2.0, 0.3) + (v > VEND - 9 ? (v - (VEND - 9)) * 0.3 : 0)) * taper(v, VEND, 0.12); return [[-w, w]]; }, 12, VEND - 1, { dim: 0, accBelow: VEND - 10 });
     fanSym(cv, { n: 6, x0: 0.8, y0: 6, x1: 8.4, y1: 8, a0: 94, a1: 84, len0: VEND - 9, len1: VEND - 11, curv: 0, w: 3.2, taper: 0.5, wave: { amp: 1.3, f: 0.5 }, accTip: 0.74, seed: 34, jit: 3 });
     fanSym(cv, { n: 5, x0: 1.5, y0: VEND - 5, x1: 9, y1: VEND - 5, a0: 94, a1: 78, len0: 5, len1: 6, curv: -0.4, curv2: -3, w: 3.4, taper: 0.8, accTip: 0.62, seed: 35, jit: 3 });
     blobs(cv, [[-8.4, VEND - 5, 3.2, 3.6], [-4.4, VEND - 3.4, 3.4, 3.8], [0, VEND - 4.2, 3.4, 3.8], [4.4, VEND - 3.4, 3.4, 3.8], [8.4, VEND - 5, 3.2, 3.6], [-9.6, 17, 2.8, 4], [9.6, 17, 2.8, 4]], { dim: 0 });
@@ -164,8 +164,8 @@ function w4(cv, view) {
   } else {
     cv.mass(ell(-1.4, 1.2, 9.8, 6.8), -6, 8, { clip: FACE_SIDE, dim: 0 });
     cv.mass(ell(-1.4, -1, 7, 3.3), -4, 3, { acc: true, dim: 0 });
-    cv.mass((v) => { const w = (10.2 + wave(v, 1.8, 0.3) + (v > VEND - 8 ? (v - (VEND - 8)) * 0.15 : 0)) * taper(v, VEND, 0.25); return [[-w + 0.8, 0.8]]; }, 5, VEND - 1, { dim: 0 });
-    cv.mass((v) => [[2.6, (5.8 + wave(v, 0.5, 0.5, 1)) * taper(v, VEND - 2, 0.2) ]], 6, VEND - 4, { dim: 0 });
+    cv.mass((v) => { const w = (10.2 + wave(v, 1.8, 0.3) + (v > VEND - 9 ? (v - (VEND - 9)) * 0.3 : 0)) * taper(v, VEND, 0.15); return [[-w + 0.8, 0.8]]; }, 5, VEND - 1, { dim: 0, accBelow: VEND - 10 });
+    cv.mass((v) => [[2.6, (5.8 + wave(v, 0.5, 0.5, 1)) * taper(v, VEND - 2, 0.2) ]], 6, VEND - 4, { dim: 0, accBelow: VEND - 12 });
     fan(cv, { n: 5, x0: -9, y0: 6, x1: -1, y1: 7, a0: 95, a1: 92, len0: VEND - 9, len1: VEND - 10, curv: 0.1, w: 3.2, taper: 0.5, wave: { amp: 1.3, f: 0.5 }, accTip: 0.74, seed: 36, jit: 3 });
     fan(cv, { n: 5, x0: -9, y0: VEND - 5, x1: 0, y1: VEND - 5, a0: 98, a1: 92, len0: 5, len1: 6, curv: 0.4, curv2: 3, w: 3.4, taper: 0.8, accTip: 0.62, seed: 37, jit: 3 });
     cv.lock(-1, -3, 52, 13.5, 1.6, 3.6);
@@ -178,27 +178,28 @@ function w4(cv, view) {
 function w5(cv, view) {
   const VEND = 28;
   if (view === 'down') {
-    cv.mass(ell(0, 1, 9.2, 6.4), -6, 8, { clip: FACE_FRONT, dim: 0 });
-    curtainFront(cv, -1, 4, VEND, 1.4, 0.5); curtainFront(cv, 1, 4, VEND, 1.4, 0.5);
+    cv.mass(ell(0, 1, 9.2, 6.4), -6, 8, { clip: FACE_FRONT, dim: 0, streak: false });
+    curtainFront(cv, -1, 4, VEND, 0.8, 0.5, { streak: false }); curtainFront(cv, 1, 4, VEND, 0.8, 0.5, { streak: false });
     strandsFront(cv, VEND, { wave: { amp: 0.4, f: 0.5 }, seed: 41, flick: -1.5 });
+    fanSym(cv, { n: 4, x0: 6.2, y0: VEND - 3, x1: 8.8, y1: VEND - 3, a0: 91, a1: 87, len0: 5, len1: 7, curv: 0, w: 3, taper: 1.2, seed: 47, jit: 4 });
     lockSym(cv, 6.2, VEND - 13, 92, 8, 0.2, 2.8, {});
-    cv.lock(-1.5, -3, 52, 14, 1.5, 3.8, { taper: 0.5 });
-    fanSym(cv, { n: 2, x0: 0.8, y0: -2.5, x1: 4, y1: -2, a0: 102, a1: 92, len0: 6, len1: 5.5, curv: -0.6, w: 2.8, seed: 43 });
+    cv.lock(-1.5, -4, 50, 16, 1.6, 5.2, { taper: 0.45 });                 // 얼굴 한쪽을 크게 덮는 사이드 뱅
+    cv.lock(-5, -3, 62, 14, 1.2, 3.6, { taper: 0.5 });
+    cv.lock(0, -6, 90, 8, 0, 1, { gap: true, minW: 1, taper: 0 });        // 가운데 가르마
   } else if (view === 'up') {
-    cv.mass(ell(0, 3, 9.4, 9.4), -6, 12, { dim: 0 });
-    cv.mass((v) => { const w = (9.6 + wave(v, 1.2, 0.3)) * taper(v, VEND, 0.2); return [[-w, w]]; }, 12, VEND - 1, { dim: 0 });
+    cv.mass(ell(0, 3, 9.4, 9.4), -6, 12, { dim: 0, streak: false });
+    cv.mass((v) => { const w = (9.6 + wave(v, 1.2, 0.3)) * taper(v, VEND, 0.2); return [[-w, w]]; }, 12, VEND - 1, { dim: 0, streak: false });
     fanSym(cv, { n: 6, x0: 0.8, y0: 6, x1: 8.4, y1: 8, a0: 93, a1: 86, len0: VEND - 9, len1: VEND - 12, curv: 0, w: 3.2, taper: 0.5, seed: 44, jit: 3.5 });
     fanSym(cv, { n: 5, x0: 1.5, y0: VEND - 5, x1: 9, y1: VEND - 5, a0: 93, a1: 82, len0: 5, len1: 6.5, curv: -0.2, curv2: -2, w: 3.4, taper: 0.8, seed: 45, jit: 3.5 });
-    blobs(cv, [[-8.4, VEND - 5, 3, 3.2], [-4.4, VEND - 4, 3.2, 3.4], [0, VEND - 4.6, 3.2, 3.4], [4.4, VEND - 4, 3.2, 3.4], [8.4, VEND - 5, 3, 3.2]], { dim: 0 });
-    gaps(cv, [-6.5, -3.5, 0, 3, 6], 6, 18, 0.3);
+    blobs(cv, [[-8.4, VEND - 5, 3, 3.2], [-4.4, VEND - 4, 3.2, 3.4], [0, VEND - 4.6, 3.2, 3.4], [4.4, VEND - 4, 3.2, 3.4], [8.4, VEND - 5, 3, 3.2]], { dim: 0, streak: false });
+    cv.lock(0, -6, 90, 12, 0, 1, { gap: true, minW: 1, taper: 0 });
   } else {
-    cv.mass(ell(-1.4, 1.2, 9.6, 6.8), -6, 8, { clip: FACE_SIDE, dim: 0 });
-    cv.mass((v) => { const w = (10.2 + wave(v, 1.1, 0.3)) * taper(v, VEND, 0.25); return [[-w + 0.8, 0.8]]; }, 5, VEND - 1, { dim: 0 });
-    cv.mass((v) => [[2.6, 5.6 * taper(v, VEND - 3, 0.2)]], 6, VEND - 6, { dim: 0 });
+    cv.mass(ell(-1.4, 1.2, 9.6, 6.8), -6, 8, { clip: FACE_SIDE, dim: 0, streak: false });
+    cv.mass((v) => { const w = (10.2 + wave(v, 1.1, 0.3)) * taper(v, VEND, 0.25); return [[-w + 0.8, 0.8]]; }, 5, VEND - 1, { dim: 0, streak: false });
+    cv.mass((v) => [[2.6, 5.6 * taper(v, VEND - 3, 0.2)]], 6, VEND - 6, { dim: 0, streak: false });
     fan(cv, { n: 5, x0: -9, y0: 6, x1: -1, y1: 7, a0: 96, a1: 92, len0: VEND - 10, len1: VEND - 11, curv: 0, w: 3.2, taper: 0.5, seed: 46, jit: 3.5 });
     fan(cv, { n: 5, x0: -9, y0: VEND - 5, x1: 0, y1: VEND - 5, a0: 97, a1: 90, len0: 5, len1: 6.5, curv: 0.2, curv2: 2, w: 3.4, taper: 0.8, seed: 47, jit: 3.5 });
     cv.lock(-1, -3, 52, 14, 1.5, 3.8, { taper: 0.5 });
-    gaps(cv, [-7, -4.5, -2], 8, 15, 0.3);
   }
 }
 

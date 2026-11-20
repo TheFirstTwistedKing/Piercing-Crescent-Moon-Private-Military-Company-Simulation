@@ -37,7 +37,7 @@ export class Cv {
   /** 머리 숱(덩어리): span(v) → [[u0,u1], ...] 구간 목록을 줄마다 채운다(v0..v1). 가닥 사이를 메워 속이 비지 않게 한다. */
   mass(span, v0, v1, o = {}) {
     const L = this.next();
-    for (let v = Math.ceil(v0); v <= v1; v++) for (const [a, b] of span(v) || []) for (let u = Math.ceil(a); u <= Math.floor(b); u++) if (!o.clip || !o.clip(u, v)) this.put(u, v, { layer: L, pos: 0, nx: 0, ny: -1, t: 0, acc: o.acc ? 1 : 0, kind: 'mass', mu: u + 0.5, mv: v, sheen: o.sheen ?? -3, bandV: o.bandV ?? 99, dim: o.dim ?? 1 });
+    for (let v = Math.ceil(v0); v <= v1; v++) for (const [a, b] of span(v) || []) for (let u = Math.ceil(a); u <= Math.floor(b); u++) if (!o.clip || !o.clip(u, v)) this.put(u, v, { layer: L, pos: 0, nx: 0, ny: -1, t: 0, acc: o.acc || (o.accBelow !== undefined && v >= o.accBelow) ? 1 : 0, streak: o.streak ?? true, kind: 'mass', mu: u + 0.5, mv: v, sheen: o.sheen ?? -3, bandV: o.bandV ?? 99, dim: o.dim ?? 1 });
   }
   /** 땋은 머리: (x,y)에서 아래로 len 칸, 폭 w(끝으로 갈수록 가늘어짐). 두 줄씩 어긋나는 밝고 어두운 마디(땋은 무늬), 맨 위 묶음 · 맨 끝 묶음, 포인트색 마디. o.plain=true 면 무늬 없이 묶음 꼬리 */
   braid(x, y, len, w, o = {}) {
@@ -97,7 +97,7 @@ function render(cv, view, c0, cA) {
       lv = 2 + (p.bpat ? 1 : -1) - (p.tie ? 2 : 0) - (p.t > 0.9 ? 1 : 0);          // 땋은 무늬: 두 줄씩 어긋나는 밝은/어두운 마디, 묶음 부분은 어둡게
     } else if (p.kind === 'mass') {
       // 숱 덩어리: 위쪽·정수리 쪽이 밝고, 세로 결(어긋난 줄) + 빛 줄기(sheen) + 아래·바깥으로 갈수록 어두움
-      const u = p.mu, v = p.mv, streak = (((Math.round(u) + 40 + Math.floor(v / 5)) % 4) + 4) % 4 === 0 && v > 1;
+      const u = p.mu, v = p.mv, streak = p.streak && (((Math.round(u) + 40 + Math.floor(v / 5)) % 4) + 4) % 4 === 0 && v > 1;
       lv = 2 + (v < -1.5 ? 1 : 0) + (Math.abs(u - (side ? p.sheen + 3 : p.sheen)) < 1.1 && v > -2 ? 1 : 0) - (streak ? 1 : 0) - (v > p.bandV ? 1 : 0) - (p.dim || 0);
       if (side ? u > 3.5 : Math.abs(u) > 8.2) lv -= 1;
     } else {
