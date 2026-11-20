@@ -28,6 +28,7 @@ const P = {
   cam: '<path d="M3 8h13v9H3zM16 11l5-3v9l-5-3"/>', map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>', doc: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', check: '<path d="M5 12l5 5 9-10"/>',
   device: '<path d="M3 5h14v10H3zM7 19h6M10 15v4M19 9h2v10h-4V9z"/>',
+  group: '<path d="M9 11a3 3 0 100-6 3 3 0 000 6zM3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 6a3 3 0 010 5.6M18 14.8c1.8.7 3 2.4 3 5.2"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z"/>',
 };
 export const icon = (name, size = 18) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">${P[name] || ''}</svg>`;

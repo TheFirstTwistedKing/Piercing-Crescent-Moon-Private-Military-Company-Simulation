@@ -2,6 +2,7 @@
 import * as Audio from '../core/audio.js';
 import { engine } from '../game/engine.js';
 import { blitView } from '../game/render.js';
+import { openGroupMission } from './group.js';
 import { DEPTS, DEPT, ROOM_LABEL, MISSIONS, MISSION, PATROL_META, STAT_KO } from '../game/data.js';
 import { clockInfo, successChance, fmtCredits, MIN_PER_SEC } from '../game/sim.js';
 import { WORLD_W, WORLD_H } from '../game/map.js';
@@ -88,7 +89,8 @@ export function mountField(root, ctx) {
     h('button', { class: 'back', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel'); }, html: `${icon('back', 18)}<span>메인 패널</span>` }), clk, wchip, speed, h('span', { class: 'grow' }),
     h('button', { class: 'btn primary sm rep', type: 'button', onclick: () => { Audio.sfx('select'); ctx.go('#/panel/report'); } }, '보고서 올리기'), bar);
   const zoomBox = h('div', { class: 'zoombox' }, h('button', { class: 'icon-btn', type: 'button', 'aria-label': '확대', html: icon('plus'), onclick: () => setZoom(cam.zoom * 1.25) }), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '축소', html: icon('minus'), onclick: () => setZoom(cam.zoom / 1.25) }),
-    h('button', { class: 'icon-btn rtoggle', type: 'button', 'aria-label': '인원 목록', html: icon('list'), onclick: () => { rosterOpen = !rosterOpen; paintRoster(); } }));
+    h('button', { class: 'icon-btn rtoggle', type: 'button', 'aria-label': '인원 목록', html: icon('list'), onclick: () => { rosterOpen = !rosterOpen; paintRoster(); } }),
+    h('button', { class: 'icon-btn gmbtn', type: 'button', 'aria-label': '단체 임무', title: '단체 임무', html: icon('group'), onclick: () => groupDlg() }));
 
   /* ── 인원/로그 패널 ── */
   const roster = h('aside', { class: 'roster', 'aria-label': '인원 목록' });
@@ -96,7 +98,7 @@ export function mountField(root, ctx) {
     roster.classList.toggle('open', rosterOpen);
     const tabs = h('div', { class: 'tabs' }, ...[['units', '인원'], ['log', '로그']].map(([k, l]) => h('button', { type: 'button', class: tab === k ? 'on' : '', onclick: () => { tab = k; paintRoster(); } }, l)), h('button', { class: 'icon-btn x', type: 'button', 'aria-label': '닫기', html: icon('close', 16), onclick: () => { rosterOpen = false; paintRoster(); } }));
     let body;
-    if (tab === 'units') body = h('div', { class: 'rbody' }, ...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en, h('small', {}, d.ko), h('button', { class: 'regroup', type: 'button', title: `${d.ko} 전원을 ${d.roomKo}(으)로 재집결`, 'aria-label': `${d.ko} 재집결`, onclick: () => regroup(d) }, '재집결')),
+    if (tab === 'units') body = h('div', { class: 'rbody' }, h('button', { class: 'btn ghost sm gm-open', type: 'button', onclick: () => groupDlg() }, '단체 임무 출동'), ...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en, h('small', {}, d.ko), h('button', { class: 'regroup', type: 'button', title: `${d.ko} 전원을 ${d.roomKo}(으)로 재집결`, 'aria-label': `${d.ko} 재집결`, onclick: () => regroup(d) }, '재집결')),
       ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${sel === u.id ? 'on' : ''} ${u.hp < 25 ? 'hurt' : ''}`, onclick: () => select(u.id, true) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin), u.isLeader ? h('span', { class: 'chip l ldchip' }, '팀장') : null), h('small', {}, sim.statusText(u)), h('span', { class: 'hpbar' }, h('i', { style: `width:${u.hp}%` })))))));
     else body = h('ol', { class: 'rbody log' }, ...sim.log.slice().reverse().map((e) => h('li', { class: e.kind }, h('time', {}, clockInfo(e.clock).text), h('span', {}, e.text))));
     roster.replaceChildren(tabs, body);
@@ -140,6 +142,7 @@ export function mountField(root, ctx) {
   };
   const refreshSheetLive = () => { const u = sel && sim.byId[sel]; if (!u || sheet.hidden) return; const sl = sheet.querySelector('.stat-line'); if (sl) sl.textContent = sim.statusText(u); const b = sheet.querySelector('.bars'); if (b) b.replaceWith(bars(u)); };
   const toastLocal = (t, kind = 'bad') => ctx.toast(t, kind);
+  const groupDlg = () => { const c = sim.ended ? { ok: false, reason: '하루가 종료되었습니다. 보고서를 제출하세요.' } : { ok: true }; if (!c.ok) { Audio.sfx('error'); toastLocal(c.reason); return; } Audio.sfx('select'); openGroupMission(sim, { toast: toastLocal, onDone: () => { follow = null; paintRoster(); } }); };
   const regroup = (d) => {
     const r = sim.regroup(d.key);
     if (!r.ok) { Audio.sfx('error'); toastLocal(r.reason || '재집결할 수 없습니다.'); return; }
