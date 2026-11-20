@@ -412,3 +412,5 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
 .rc-teamwrap { margin-top: var(--s6); } .rc-team { list-style: none; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); } .rc-team li { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); background: var(--bg); flex-wrap: wrap; } .rc-team small { display: block; color: var(--ink3); font: 500 11px/1.5 var(--mono); }
 .rc-empty { padding: var(--s5) 0; }
 @media (max-width: 480px) { .rc-cards { grid-template-columns: 1fr; } .rc-head h2 small { display: block; margin: 2px 0 0; } }
+
+.gun-line { color: var(--amber); font: 500 11px/1.4 var(--mono); margin-top: var(--s1); }
