@@ -42,7 +42,7 @@ function crown(g, o, view) {
   if (top === 'crest') { for (const x of [9, 10]) g.rect(x, 2, x, 3); g.rect(14, 1, 17, 3); g.rect(21, 2, 22, 3); g.rect(12, 3, 13, 3); g.rect(18, 3, 20, 3); }
   if (top === 'tufts') { g.rect(9, 0, 12, 3); g.rect(19, 0, 22, 3); g.rect(10, 0, 11, 0); g.cut(9, 0, 9, 0); g.cut(22, 0, 22, 0); }
   if (top === 'spike') { for (const [x0, x1, y0] of [[8, 9, 1], [11, 12, 0], [15, 16, -1], [19, 20, 0], [22, 23, 1]]) g.rect(x0, y0, x1, 3); }
-  if (top === 'mohawk') { g.cut(8, 4, 23, 11); g.rect(14, -2, 17, 10); g.rect(13, 4, 18, 10); for (const [x, y] of [...g.m.values()]) if (x < 14 || x > 17) g.mark.set(g.k(x, y), 'stub'); }
+  if (top === 'mohawk') { g.cut(8, 4, 23, 11); g.rect(14, 0, 17, 10); g.rect(13, 4, 18, 10); g.rect(9, 6, 12, 10); g.rect(19, 6, 22, 10); for (const [x, y] of [...g.m.values()]) if (x < 14 || x > 17) g.mark.set(g.k(x, y), 'stub'); }
   if (top === 'part') g.line(view === 'down' ? 18 : 15, 4, 8, 'dsh');
 }
 
@@ -164,10 +164,13 @@ export function hairGrid(view, style) {
 /** P(색, x, y, w, h): 실제 픽셀 사각형. 뿌리 col → 끝 tip 그라데이션은 y 가 아래일수록 tip 에 가깝게. */
 export function drawHair3(P, view, style, col, tip) {
   const { g: vg } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
-  // 설계 공간(머리 x8..23 × 피부 y7..21)을 템플릿 머리(앞/뒤 x10..22, 옆 x9..22 · 피부 y5..17)로 옮긴다: 대상 픽셀마다 설계 격자를 거꾸로 조회한다.
-  const X0 = view === 'side' ? 9 : 10, SX = view === 'side' ? 0.875 : 0.8125, Y0 = 2.4, SY = 0.867, g = new Grid();
+  // 설계 공간(머리 x8..23, 피부 y7..21)을 템플릿 머리로 옮긴다. 가로: 설계 x8..24 → 실제 앞/뒤 x9..23, 옆 x9..23.
+  // 세로는 템플릿 눈높이에 맞춘 구간별 변환: 정수리(설계 y4→2.5) · 피부 윗면(7→5) · 앞머리 끝(10→11, 눈썹 바로 위) · 턱(21→17.5).
+  // (설계 앞머리선 y10 이 템플릿 눈썹 y12 바로 위 y11 에 오도록 해서 이마가 드러나 머리가 뜨는 일이 없게 한다.)
+  const X0 = 9, SX = 0.875, KN = [[4, 2.5], [7, 5], [10, 11], [21, 17.5]], g = new Grid();
+  const toV = (t) => { if (t <= KN[0][1]) return KN[0][0] + (t - KN[0][1]); for (let k = 0; k < KN.length - 1; k++) if (t < KN[k + 1][1]) return KN[k][0] + (t - KN[k][1]) * (KN[k + 1][0] - KN[k][0]) / (KN[k + 1][1] - KN[k][1]); return KN[3][0] + (t - KN[3][1]) / 0.9; };
   for (let ty = 0; ty < 48; ty++) for (let tx = 0; tx < 32; tx++) {
-    const vx = Math.round(8 + (tx - X0 + 0.5) / SX - 0.5), vy = Math.round(4 + (ty - Y0 + 0.5) / SY - 0.5);
+    const vx = Math.floor(8 + (tx + 0.5 - X0) / SX), vy = Math.floor(toV(ty + 0.5));
     if (vg.has(vx, vy)) { g.set(tx, ty); const mk = vg.mark.get(vg.k(vx, vy)); if (mk) g.mark.set(g.k(tx, ty), mk); }
   }
   const mid = (x, y) => { let rgb = c0; if (t0) { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); rgb = c0.map((v, i) => v + (t0[i] - v) * tt); } return rgb; };
