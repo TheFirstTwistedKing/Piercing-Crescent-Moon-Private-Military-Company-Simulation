@@ -85,7 +85,7 @@ export class Sim {
     if (toast && !this.quiet) this.emit('toast', e);
     this.dirty = true;
   }
-  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [] }; }
+  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [], fees: 0 }; }
 
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
 
@@ -327,7 +327,21 @@ export class Sim {
     u.name = name; u.latin = latin; this.dirty = true; this.emit('custom'); return { ok: true };
   }
   resetName(id) { const u = this.byId[id]; return this.setName(id, u.baseName, u.baseLatin); }
-  setWeapon(id, w) { const u = this.byId[id]; if (!WEAPON[w]) return { ok: false, reason: '없는 무기' }; u.weapon = w; this.refresh(); return { ok: true }; }
+  setWeapon(id, w) {
+    const u = this.byId[id]; if (!WEAPON[w]) return { ok: false, reason: '없는 무기' };
+    if (WEAPON[w].workshop) return { ok: false, reason: '공방 무기는 착용비를 내고 착용해야 합니다.' };
+    u.weapon = w; this.refresh(); return { ok: true };
+  }
+  /** 공방 무기 착용: 착용비를 한 번 내고, 착용하는 동안 매일 유지비가 운영비에 더해진다. (기본 무기로 바꾸면 유지비 중단) */
+  equipWorkshop(id, wid) {
+    const u = this.byId[id], w = WEAPON[wid]; if (!u || !w?.workshop) return { ok: false, reason: '없는 공방 무기' };
+    if (u.weapon === wid) return { ok: false, reason: '이미 착용 중입니다.' };
+    if (this.funds < w.fee) return { ok: false, reason: `자금이 부족합니다. (필요 ${w.fee.toLocaleString('ko-KR')} CR)` };
+    this.funds -= w.fee; this.dayLog.fees = (this.dayLog.fees || 0) + w.fee; u.weapon = wid;
+    this.note(`${u.name} — ${w.name} 착용 (착용비 -${w.fee.toLocaleString('ko-KR')} CR · 일일 유지비 ${w.upkeep.toLocaleString('ko-KR')} CR)`, 'order', false);
+    this.refresh(); return { ok: true, fee: w.fee, upkeep: w.upkeep };
+  }
+  weaponUpkeep() { return this.units.reduce((a, u) => a + (WEAPON[u.weapon]?.upkeep || 0), 0); }
   /** 스탯 한 칸을 v 로(0~10, 총합은 포인트 풀 이내). 실제 반영된 값을 돌려준다. */
   setStat(id, k, v) {
     const u = this.byId[id]; if (!(k in u.alloc)) return { ok: false };
@@ -657,7 +671,7 @@ export class Sim {
     }
     const L = this.dayLog;
     const income = L.missions.reduce((a, m) => a + m.reward, 0);
-    const upkeep = Math.max(0, this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0) + this.furnitureUpkeep());
+    const upkeep = Math.max(0, this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0) + this.furnitureUpkeep() + this.weaponUpkeep());
     const depts = DEPTS.map((d) => {
       const members = this.units.filter((u) => u.dept === d.key);
       const ms = L.missions.filter((m) => m.dept === d.key);
@@ -666,7 +680,7 @@ export class Sim {
     const injured = this.units.filter((u) => u.hp < 50).map((u) => ({ name: u.name, hp: Math.round(u.hp) }));
     const m = L.missions;
     const summary = `임무 ${m.length}건(성공 ${m.filter((x) => x.result === 'success').length}, 부분 ${m.filter((x) => x.result === 'partial').length}, 실패 ${m.filter((x) => x.result === 'fail').length}), 순찰 ${L.patrols.length}회, 명령 ${L.orders}건. 수입 ${fmtCredits(income)}, 운영비 ${fmtCredits(-upkeep)}.`;
-    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), depts, injured, summary };
+    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), workshopFees: L.fees || 0, weaponUpkeep: this.weaponUpkeep(), depts, injured, summary };
   }
 
   /** 보고서 제출 후 다음 날로 */

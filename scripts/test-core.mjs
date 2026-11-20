@@ -6,7 +6,7 @@ import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChan
 import { nickKey, nickProblem } from '../src/core/nick.js';
 import { TRAITS, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
 import { HAIR_STYLES } from '../src/game/hair.js';
-import { WEAPONS } from '../src/game/weapons.js';
+import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, drawWeapon } from '../src/game/weapons.js';
 import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
 import { RESEARCH, RESEARCH_BY_KEY } from '../src/game/research.js';
 import { WEATHERS, rollWeather, dailySnow, TASKS, START_SNOW } from '../src/game/weather.js';
@@ -426,5 +426,40 @@ await t('단체 임무: 저장/복원(진행 중 유지), 손상된 저장은 �
   const bad2 = JSON.parse(JSON.stringify(snap)); bad2.groups = []; assert.ok(ids.every((i) => new Sim(bad2, () => 0.5).byId[i].mode === 'idle'), '그룹 정보가 없으면 해제');
   const bad3 = JSON.parse(JSON.stringify(snap)); bad3.groups[0].ids = ['c10', 'c13']; assert.ok(ids.every((i) => new Sim(bad3, () => 0.5).byId[i].mode === 'idle'), '인원 수 불일치 → 해제');
   const old = JSON.parse(JSON.stringify(snap)); delete old.groups; delete old.gseq; assert.ok(new Sim(old, () => 0.5)); const bad4 = JSON.parse(JSON.stringify(snap)); bad4.units.c10.mission.id = 'zzz'; assert.equal(new Sim(bad4, () => 0.5).byId.c10.mode, 'idle', '모르는 임무 id');
+});
+await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개, 공방별 20개, 티어가 오를수록 비용·성능 증가', () => {
+  assert.deepEqual(WORKSHOPS.map((w) => w.name), ['마그마 인더스트리 공방', '아크 공방', '웨폰 & 아머 디벨롭 인더스트리 공방']);
+  assert.equal(WORKSHOP_WEAPONS.length, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.id)).size, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.name)).size, 60, '이름 고유');
+  for (const wk of WORKSHOPS) assert.equal(WORKSHOP_WEAPONS.filter((w) => w.workshop === wk.id).length, 20, wk.id);
+  const types = WEAPONS.filter((w) => w.id !== 'frostblade'); assert.equal(types.length, 12);
+  for (const ty of types) {
+    const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id).sort((a, b) => a.tier - b.tier); assert.equal(set.length, 5, ty.id); assert.deepEqual(set.map((w) => w.tier), [1, 2, 3, 4, 5]);
+    for (let i = 1; i < 5; i++) { assert.ok(set[i].fee > set[i - 1].fee && set[i].upkeep > set[i - 1].upkeep, `${ty.id} 티어가 오르면 비용 증가`); }
+    assert.ok(new Set(set.map((w) => w.workshop)).size >= 2, '한 종류의 5개는 여러 공방에 걸쳐 있다');
+  }
+  assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade'), '서리 대검은 공방 종류가 아님');
+  for (const w of WORKSHOP_WEAPONS) { assert.ok(w.fee >= 2000 && w.upkeep >= 100 && w.name && w.desc && WEAPON[w.id] === w); assert.ok(Object.values(w.fx).every((v) => typeof v === 'boolean' || Number.isFinite(v))); }
+  // 공방 성향: 마그마=근력·한파 무시, 아크=기술·안개 무시·순찰 안전, 웨폰&아머=방어·부상 경감
+  const m5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma' && w.tier === 5), a5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'arc' && w.tier === 5), d5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'wad' && w.tier === 5), m1 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma' && w.tier === 1);
+  assert.ok(m5.fx.str >= 4 && m5.fx.coldProof && !m1.fx.coldProof); assert.ok(a5.fx.skl >= 4 && a5.fx.fogProof && a5.fx.patrolSafe); assert.ok(d5.fx.def >= 4 && d5.fx.dmg < 0 && d5.fx.rest > 0);
+  // 그리기: 모든 공방 무기를 세 방향으로 그려도 오류 없이 기본 무기와 다른 색을 쓴다
+  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const calls = []; drawWeapon((c, x, y, ww, hh) => calls.push(c), view, w.id); assert.ok(calls.length > 0, w.id); assert.ok(calls.every((c) => /^#[0-9a-f]{6}$/.test(c)), w.id + ' 색 형식'); }
+  const base = [], ws = []; drawWeapon((c) => base.push(c), 'down', 'longsword'); drawWeapon((c) => ws.push(c), 'down', WORKSHOP_WEAPONS.find((w) => w.base === 'longsword' && w.workshop === 'magma').id); assert.notDeepEqual(base, ws, '공방 색상 적용');
+});
+await t('공방 무기 착용: 착용비 즉시 지불, 유지비는 매일 운영비에 포함, 기본 무기로 바꾸면 중단, 저장/복원', () => {
+  const s = new Sim(null, () => 0.5), w = WORKSHOP_WEAPONS.find((x) => x.id === 'magma_greatsword_4'), u = s.byId.c04, up0 = s.buildReport(true).upkeep, f0 = s.funds;
+  assert.equal(s.setWeapon('c04', w.id).ok, false, '일반 무기 교체로는 공방 무기를 얻을 수 없다'); assert.equal(u.weapon, 'battleaxe');
+  const s0 = u.fx.str, r = s.equipWorkshop('c04', w.id); assert.ok(r.ok); assert.equal(u.weapon, w.id); assert.equal(s.funds, f0 - w.fee); assert.equal(s.dayLog.fees, w.fee); assert.equal(u.fx.str, s0 - 3 + w.fx.str, '능력치 반영(기존 도끼 근력 -3, 새 무기 +)'); assert.ok(u.fx.coldProof, '한파 무시');
+  assert.equal(s.buildReport(true).upkeep - up0, w.upkeep, '유지비가 운영비에 더해짐'); assert.equal(s.buildReport(true).weaponUpkeep, w.upkeep); assert.equal(s.buildReport(true).workshopFees, w.fee);
+  assert.equal(s.equipWorkshop('c04', w.id).ok, false, '이미 착용 중이면 다시 결제하지 않음'); assert.equal(s.funds, f0 - w.fee);
+  const rep = s.buildReport(false); assert.equal(rep.fundsEnd, s.funds - rep.upkeep); s.nextDay(rep); assert.equal(s.funds, rep.fundsEnd); assert.equal(s.dayLog.fees, 0, '다음 날 착용비 집계 초기화'); assert.equal(s.buildReport(true).upkeep - up0, w.upkeep, '다음 날도 유지비 계속');
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, () => 0.5); assert.equal(x.byId.c04.weapon, w.id); assert.equal(x.funds, s.funds, '복원해도 착용비를 다시 내지 않음'); assert.equal(x.weaponUpkeep(), w.upkeep);
+  assert.ok(s.setWeapon('c04', 'rapier').ok); assert.equal(s.weaponUpkeep(), 0, '기본 무기로 바꾸면 유지비 중단'); assert.equal(s.buildReport(true).upkeep, up0);
+  // 자금 부족 / 없는 무기
+  const p = new Sim(null, () => 0.5), big = WORKSHOP_WEAPONS.find((x) => x.tier === 5); p.funds = big.fee - 1; assert.equal(p.equipWorkshop('c04', big.id).ok, false); assert.equal(p.funds, big.fee - 1); assert.equal(p.byId.c04.weapon, 'battleaxe'); assert.equal(p.equipWorkshop('c04', 'laser').ok, false); assert.equal(p.equipWorkshop('c04', 'battleaxe').ok, false);
+  // 여러 명이 착용하면 유지비가 합산된다
+  const q = new Sim(null, () => 0.5); q.funds = 1e6; const a = WORKSHOP_WEAPONS[0], b = WORKSHOP_WEAPONS[7]; q.equipWorkshop('c01', a.id); q.equipWorkshop('c02', b.id); assert.equal(q.weaponUpkeep(), a.upkeep + b.upkeep);
+  // 손상된 저장: 모르는 공방 무기 id 는 기존 무기 유지
+  const bad = JSON.parse(JSON.stringify(snap)); bad.units.c04.c.w = 'magma_laser_9'; assert.equal(new Sim(bad, () => 0.5).byId.c04.weapon, 'battleaxe');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
