@@ -39,12 +39,15 @@ export class Cv {
     const L = this.next();
     for (let v = Math.ceil(v0); v <= v1; v++) for (const [a, b] of span(v) || []) for (let u = Math.ceil(a); u <= Math.floor(b); u++) if (!o.clip || !o.clip(u, v)) this.put(u, v, { layer: L, pos: 0, nx: 0, ny: -1, t: 0, acc: o.acc ? 1 : 0, kind: 'mass', mu: u + 0.5, mv: v, sheen: o.sheen ?? -3, bandV: o.bandV ?? 99, dim: o.dim ?? 1 });
   }
-  /** 땋은 머리/묶음 꼬리: (x,y)에서 아래로 len 칸, 폭 w(끝으로 갈수록 가늘어짐), 어긋난 마디 + 포인트색 마디. */
+  /** 땋은 머리: (x,y)에서 아래로 len 칸, 폭 w(끝으로 갈수록 가늘어짐). 두 줄씩 어긋나는 밝고 어두운 마디(땋은 무늬), 맨 위 묶음 · 맨 끝 묶음, 포인트색 마디. o.plain=true 면 무늬 없이 묶음 꼬리 */
   braid(x, y, len, w, o = {}) {
     const L = this.next();
     for (let i = 0; i <= len; i++) {
       const t = i / len, wd = Math.max(1, Math.round(w * (1 - (o.taper ?? 0.5) * t))), sway = o.sway ? Math.round(Math.sin(i * (o.swayF ?? 0.5)) * o.sway) : 0, drift = Math.round((o.drift || 0) * t);
-      for (let s = 0; s < wd; s++) this.put(Math.round(x - wd / 2 + s + sway + drift), y + i, { layer: L, pos: wd > 1 ? (s / (wd - 1)) * 2 - 1 : 0, nx: 1, ny: 0, t, acc: (o.accTip !== undefined && t >= o.accTip) || (o.accMid && i % 4 === 2) ? 1 : 0, kind: 'lock', knot: !!o.knot && i % 3 === 0 });
+      for (let s = 0; s < wd; s++) {
+        const acc = (o.accTip !== undefined && t >= o.accTip) || (o.accMid && i % 4 === 2) ? 1 : 0, tie = i === 0 || i === len - 1 && !o.plain;
+        this.put(Math.round(x - wd / 2 + s + sway + drift), y + i, { layer: L, pos: wd > 1 ? (s / (wd - 1)) * 2 - 1 : 0, nx: 1, ny: 0, t, acc, kind: o.plain ? 'lock' : 'braid', bpat: (((i >> 1) & 1) ^ (s & 1)), tie });
+      }
     }
   }
 }
@@ -90,6 +93,8 @@ function render(cv, view, c0, cA) {
     const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !cv.has(x + dx, y + dy));
     if (p.kind === 'cap') {
       const u = p.cu, v = p.cv; lv = 2 + (v < -1.5 ? 1 : 0) + (Math.hypot(u + (side ? -1 : 0), v + 2.6) < 2.4 ? 1 : 0) - (Math.abs(u) > 5.8 ? 1 : 0) - (v > 3 ? 1 : 0);
+    } else if (p.kind === 'braid') {
+      lv = 2 + (p.bpat ? 1 : -1) - (p.tie ? 2 : 0) - (p.t > 0.9 ? 1 : 0);          // 땋은 무늬: 두 줄씩 어긋나는 밝은/어두운 마디, 묶음 부분은 어둡게
     } else if (p.kind === 'mass') {
       // 숱 덩어리: 위쪽·정수리 쪽이 밝고, 세로 결(어긋난 줄) + 빛 줄기(sheen) + 아래·바깥으로 갈수록 어두움
       const u = p.mu, v = p.mv, streak = (((Math.round(u) + 40 + Math.floor(v / 5)) % 4) + 4) % 4 === 0 && v > 1;
