@@ -32,9 +32,9 @@ await t('콜사인: 정규화 키로 중복 판정, 규칙 검증', () => {
   for (const bad of ['a', '가', 'x'.repeat(13), 'a/b', '<b>', 'Admin', '관리자', ' ', '__', '😀😀']) assert.notEqual(nickProblem(bad), '', bad);
 });
 await t('로스터/부서 구성', () => {
-  assert.equal(DEPTS.length, 8); assert.equal(ROSTER.length, 24);
-  for (const d of DEPTS) assert.equal(ROSTER.filter((r) => r.dept === d.key).length, 3, d.key);
-  assert.ok(ROSTER.every((r) => /^[A-Z][a-z]+$/.test(r.latin)) && new Set(ROSTER.map((r) => r.latin)).size === 24, '라틴어 이름 24개 고유'); assert.equal(MISSIONS.length, 24); assert.equal(new Set(ROSTER.map((r) => r.id)).size, 24);
+  assert.equal(DEPTS.length, 8); assert.equal(ROSTER.length, 25);
+  for (const d of DEPTS) assert.equal(ROSTER.filter((r) => r.dept === d.key).length, d.key === 'operation' ? 4 : 3, d.key);
+  assert.ok(ROSTER.every((r) => /^[A-Z][a-z]+$/.test(r.latin)) && new Set(ROSTER.map((r) => r.latin)).size === 25, '라틴어 이름 25개 고유'); assert.equal(MISSIONS.length, 24); assert.equal(new Set(ROSTER.map((r) => r.id)).size, 25);
 });
 await t('맵: 모든 방의 서성임 타일이 복도·정문과 연결됨', () => {
   for (const k of [...Object.keys(ROOMS), 'lobby']) {
@@ -117,9 +117,9 @@ await t('성공 확률: 같은 부서·높은 스탯이 더 높고 범위 [0.05,
   assert.ok(a > b); for (const u of s.units) for (const m of MISSIONS) { const p = successChance(u, m); assert.ok(p >= 0.05 && p <= 0.97); }
 });
 
-await t('커스터마이징 데이터: 머리 남/여 10개, 무기 12종, 특성 20/20/20, 능력 5, 스탯 6', () => {
+await t('커스터마이징 데이터: 머리 남/여 10개, 무기 13종, 특성 20/20/20, 능력 5, 스탯 6', () => {
   assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 10); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 10);
-  assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '배틀엑스']);
+  assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '서리 대검', '배틀엑스']);
   for (const r of ['c', 'r', 'l']) assert.equal(TRAITS.filter((x) => x.rarity === r).length, 20, r);
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && x.bad).length >= 3, '순수하게 나쁜 전설 특성');
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && !x.bad).length >= 10, '좋은 전설 특성도 존재');
@@ -362,5 +362,32 @@ await t('이벤트 저장/복원: 대기 중 사건·쿨다운·카운터 보존
   const bad = JSON.parse(JSON.stringify(snap)); bad.ev = { pending: { id: 'nope', who: 'zzz' }, cd: { op1: 'x', nope: 3 }, today: 99, acc: -5, buffs: [{ fx: { str: 99, hack: 1, def: 1 }, label: 'a'.repeat(50), dept: 'zzz' }, null] };
   const b = new Sim(bad, () => 0.5); assert.equal(b.pendingEvent, null); assert.deepEqual(b.ev.cd, {}); assert.equal(b.ev.today, EV_MAX_PER_DAY); assert.equal(b.ev.acc, 0); assert.equal(b.ev.buffs.length, 1); assert.deepEqual(b.ev.buffs[0].fx, { def: 1 }); assert.equal(b.ev.buffs[0].label.length, 30); assert.equal(b.ev.buffs[0].dept, null);
   const old = JSON.parse(JSON.stringify(snap)); delete old.ev; delete old.dayLog.events; const o = new Sim(old, () => 0.5); assert.equal(o.pendingEvent, null); assert.equal(o.buildReport(true).events.length, 0, '옛 저장에도 안전');
+});
+await t('유승호: Operation 팀장(대검 · 끝이 붉은 검은 머리), 한서윤은 일반 팀원, 머리 끝색 저장/복원', () => {
+  const u = ROSTER.find((r) => r.id === 'c25'); assert.equal(u.name, '유승호'); assert.equal(u.dept, 'operation'); assert.equal(u.latin, 'Praefectus'); assert.equal(u.weapon, 'frostblade'); assert.equal(u.look.hairStyle, 'm3', '가르마'); assert.equal(u.gender, 'm'); assert.equal(u.look.hair2, '#c0261c');
+  assert.equal(LEADER_IDS.operation, 'c25'); assert.ok(LEADER_TALK.c25 && !LEADER_TALK.c01);
+  const s = new Sim(null, () => 0.5); assert.equal(s.leaderUnit('operation').name, '유승호'); assert.equal(s.byId.c25.isLeader, true); assert.equal(s.byId.c01.isLeader, false);
+  assert.ok(s.byId.c01.fx.succ > 0 && s.byId.c25.aura === 0, '한서윤은 감화를 받고 팀장 본인은 받지 않음');
+  assert.equal(s.units.filter((x) => x.dept === 'operation').length, 4); assert.equal(s.talkLeader('operation', 'report').lines[1].includes('부서원 4명'), true);
+  assert.equal(WEAPON_FX_OK(s.byId.c25), true);
+  assert.equal(s.setHairTip('c25', 'red').ok, false); assert.ok(s.setHairTip('c04', '#00FF88').ok); assert.equal(s.byId.c04.look.hair2, '#00ff88');
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const r = new Sim(snap, () => 0.5); assert.equal(r.byId.c04.look.hair2, '#00ff88'); assert.equal(r.byId.c25.look.hair2, '#c0261c', '기본 끝색 유지');
+  assert.ok(s.setHairTip('c25', null).ok); const r2 = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(r2.byId.c25.look.hair2, null, '끝색 제거도 저장');
+  const bad = JSON.parse(JSON.stringify(snap)); bad.units.c04.c.h2 = 'javascript:1'; assert.equal(new Sim(bad, () => 0.5).byId.c04.look.hair2, null, '잘못된 값은 단색');
+  const old = JSON.parse(JSON.stringify(snap)); delete old.units.c25; assert.equal(new Sim(old, () => 0.5).byId.c25.hp, 100, '옛 저장(유승호 없음)에서도 정상');
+});
+function WEAPON_FX_OK(u) { return u.fx.str >= 3 && u.fx.def >= 1; }
+await t('부서 재집결: 부서 인원 전원을 부서 방으로, 임무·부상자 제외, 순찰/작업 중단', () => {
+  const s = new Sim(null, () => 0.5); const rg = s.units.filter((u) => u.dept === 'rager');
+  rg[0].home = 'lobby'; s.sendToRoom(rg[0].id, 'lobby'); s.sendPatrol(rg[1].id, 'perimeter'); 
+  const r = s.regroup('rager'); assert.ok(r.ok); assert.equal(r.moved.length, 3); assert.equal(r.skipped.length, 0);
+  assert.ok(rg.every((u) => u.home === 'rager' && (u.mode === 'goto' || u.mode === 'idle')), '전원 부서 방으로'); assert.equal(rg[1].patrol, null, '순찰 중단');
+  assert.equal(s.dayLog.orders >= 1, true);
+  const s2 = new Sim(null, () => 0.5); const m = s2.units.filter((u) => u.dept === 'medical'); s2.sendMission(m[0].id, 'md1'); m[1].hp = 10;
+  const r2 = s2.regroup('medical'); assert.equal(r2.moved.length, 1); assert.deepEqual(r2.skipped.map((x) => x.why), ['임무 중', '부상(의무실)']); assert.equal(m[0].mode, 'mission', '임무는 유지');
+  const s3 = new Sim(null, () => 0.5); for (const u of s3.units.filter((x) => x.dept === 'carrier')) u.hp = 5; assert.equal(s3.regroup('carrier').ok, false);
+  assert.equal(s3.regroup('nope').ok, false); const s4 = new Sim(null, () => 0.5); s4.ended = true; assert.equal(s4.regroup('rager').ok, false);
+  // 모든 부서에서 동작
+  const s5 = new Sim(null, () => 0.5); for (const d of DEPTS) assert.equal(s5.regroup(d.key).moved.length, ROSTER.filter((x) => x.dept === d.key).length, d.key);
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
