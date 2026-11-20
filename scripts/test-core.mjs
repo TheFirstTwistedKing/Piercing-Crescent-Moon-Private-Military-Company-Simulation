@@ -657,4 +657,13 @@ await t('2배 해상도 총기 도안: 모든 총기에 반 칸 도안(px2)이 �
   }
   const sig = (w) => w.art.px2.map((q) => q.join(',')).sort().join(';'); assert.equal(new Set(guns.map(sig)).size, guns.length, '총기마다 2배 도안도 모두 다르다');
 });
+await t('머리카락 위치: 템플릿 머리 위에 붙어 있다(정수리를 덮고, 앞머리선이 눈썹 바로 위까지 내려온다)', () => {
+  const mask = (id, view) => { const m = new Set(); drawHair((c, x, y, w, h) => { for (let j = 0; j < Math.round(h * 2); j++) for (let i = 0; i < Math.round(w * 2); i++) m.add(`${Math.round(x * 2) + i},${Math.round(y * 2) + j}`); }, view, id, '#808080'); return m; };
+  const short = new Set(['m9', 'm17', 'm21', 'm6']);
+  for (const s of HAIR_STYLES) {
+    if (short.has(s.id)) continue;
+    for (const v of ['down', 'up', 'side']) { const m = mask(s.id, v); for (const [x, y] of (v === 'side' ? [[14, 6], [16, 6], [18, 6]] : [[13, 6], [16, 6], [19, 6]])) assert.ok(m.has(`${x},${y}`), `${s.name} ${v} 정수리 (${x},${y}) 비어 있음`); }
+    const m = mask(s.id, 'down'); let lo = -1; for (let y = 4; y < 14; y++) if (m.has(`16,${y}`) || m.has(`15,${y}`)) lo = y; assert.ok(lo >= 10 && lo <= 13, `${s.name} 앞머리선 y${lo}`);
+  }
+});
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
