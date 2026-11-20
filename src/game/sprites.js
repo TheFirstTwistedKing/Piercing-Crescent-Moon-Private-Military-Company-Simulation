@@ -52,6 +52,7 @@ const hash = (str) => { let h = 7; for (const ch of str) h = (Math.imul(h, 31) +
 const EYES = ['#3a82d0', '#6a4a30', '#3f9a62', '#8a5ac8', '#38404c'];
 const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const hexOf = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const p = rgb(a), q = rgb(b); return hexOf(p.map((v, i) => Math.round(v + (q[i] - v) * t))); };
 const tone = (tpl, tplBase, base) => { const t = rgb(tpl), b = rgb(tplBase), c = rgb(base); return hexOf(t.map((v, i) => c[i] + (v - b[i]))); };
 /** 템플릿 역할 글자 → 색. 몸통(행<30)과 다리(행≥30)의 검은색은 다른 옷(소매 / 바지)이다. */
 function bodyPalette(L, accent) {
@@ -59,7 +60,7 @@ function bodyPalette(L, accent) {
   const sleeve = adj(L.coat2, -12), pants = L.pants;
   return {
     o: sk('#77432e'), O: sk('#572d1d'), s: sk('#f9d2a9'), l: sk('#ffebc6'), h: sk('#d88a64'),
-    x: adj(eye, 52), u: adj(eye, -52), v: adj(eye, -22), y: adj(eye, 84), w: eye,
+    x: mix(eye, '#ffffff', 0.66), u: adj(eye, -52), v: adj(eye, -22), y: '#eef3f8', w: eye,      // 흰자(x 밝은 테두리 · y 하이라이트)는 눈동자색과 상관없이 밝게 — 어두운 눈동자색에서 회색으로 가라앉지 않게
     F: co('#2c312a'), H: L.coat, K: co('#788372'), I: co('#909090'), G: co('#555555'),
     B: '#0a0a0c', C: sleeve, c: pants, E: '#aaaaaa', D: '#dcdcdc', U: adj(accent, -70), V: adj(accent, -30), R: accent, r: adj(accent, -60), Q: adj(accent, 34),
   };
