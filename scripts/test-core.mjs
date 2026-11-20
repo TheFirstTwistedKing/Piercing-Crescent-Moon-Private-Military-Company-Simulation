@@ -14,9 +14,10 @@ import { ITEMS, ITEM, STAT_ITEMS, EQUIPMENT, CONSUMABLES, FURNITURE, ROOM_KEYS, 
 import { LEADER_IDS, LEADER_TALK, REQUEST_COST } from '../src/game/leaders.js';
 import { SLOTS, FURNACE, yardWorkTiles, isOutdoor } from '../src/game/map.js';
 import { ROSTER, DEPTS, MISSIONS, MISSION, MONO, GROUP_MISSIONS, GMISSION } from '../src/game/data.js';
+import { RaidBattle, planRaid, defenderFrom, RAID_CHANCE, FORMATIONS, ENEMY_TYPES, ABILITY_INFO, ARENA } from '../src/game/raid.js';
 import { EVENTS, EVENT, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from '../src/game/events.js';
 
-Sim.EVENTS_ON = false;   // 기존 테스트는 무작위 사건 없이 진행(사건 테스트에서 따로 켠다)
+Sim.EVENTS_ON = false; Sim.RAIDS_ON = false;   // 기존 테스트는 무작위 사건 없이 진행(사건 테스트에서 따로 켠다)
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
 
@@ -465,5 +466,64 @@ await t('공방 무기 착용: 착용비 즉시 지불, 유지비는 매일 운�
   const q = new Sim(null, () => 0.5); q.funds = 1e6; const a = WORKSHOP_WEAPONS[0], b = WORKSHOP_WEAPONS[7]; q.equipWorkshop('c01', a.id); q.equipWorkshop('c02', b.id); assert.equal(q.weaponUpkeep(), a.upkeep + b.upkeep);
   // 손상된 저장: 모르는 공방 무기 id 는 기존 무기 유지
   const bad = JSON.parse(JSON.stringify(snap)); bad.units.c04.c.w = 'magma_laser_9'; assert.equal(new Sim(bad, () => 0.5).byId.c04.weapon, 'battleaxe');
+});
+await t('긴급 습격 전투: 결정적(같은 시드=같은 결과), 규모는 날짜에 따라 증가, 부서 특수 능력이 모두 발동', () => {
+  assert.deepEqual(RAID_CHANCE, { day: 0.01, night: 0.05 });
+  const seq = (seed) => { let a = seed; return () => { a = (a * 16807) % 2147483647; return a / 2147483647; }; };
+  const sizes = [1, 10, 25].map((d) => { let s = 0; for (let i = 0; i < 40; i++) s += planRaid(d, seq(i + 1)).size; return s / 40; }); assert.ok(sizes[0] < sizes[1] && sizes[1] < sizes[2], '날이 갈수록 습격이 커진다: ' + sizes);
+  assert.ok(planRaid(12, seq(3)).types.includes('boss') && !planRaid(1, seq(3)).types.includes('boss'), '큰 습격에만 습격대장'); assert.ok(planRaid(1, seq(1)).types.every((x) => ENEMY_TYPES[x]));
+  const s = new Sim(null, () => 0.5), all = s.units.map(defenderFrom), plan = planRaid(8, seq(7)); assert.equal(all.length, 25); assert.ok(all.every((d) => d.maxhp > 0 && d.atk > 0 && d.hp > 0));
+  const lead = defenderFrom(s.byId.c25), mate = defenderFrom(s.byId.c01); assert.ok(lead.maxhp > mate.maxhp * 1.05 && lead.atk > 0, '팀장은 더 강하다'); assert.equal(defenderFrom(s.byId.c19).range, 6, '공중 지원팀은 원거리');
+  const a = new RaidBattle({ defenders: all, plan, day: 8, seed: 42 }).finish(), b = new RaidBattle({ defenders: all, plan, day: 8, seed: 42 }).finish(); assert.deepEqual(a, b, '결정적'); assert.ok(a.t > 3 && a.t < 130);
+  // 능력 발동 수집
+  const seen = new Set(); let healed = 0;
+  for (let sd = 1; sd <= 12; sd++) { const bt = new RaidBattle({ defenders: all, plan: planRaid(16, seq(sd)), day: 16, seed: sd }); while (!bt.done) { bt.step(0.5); for (const f of bt.drainFx()) { seen.add(f.text); if (f.kind === 'heal') healed++; } } }
+  for (const k of ['강타!', '밀치기!', '지원 사격!', '방벽', '교란', '기습!']) assert.ok(seen.has(k), k + ' 발동'); assert.ok(healed > 0, '치유 발동'); assert.ok(seen.has('격파') && ['치유', '밀치기', '강타', '지원 사격', '방벽', '교란'].every((n) => Object.values(ABILITY_INFO).some((x) => x.name === n)));
+  // 능력 효과: 밀치기는 적을 뒤로 밀고 기절, 치유는 체력 회복, 강타는 주변 적에게도 피해
+  const solo = (dept, extra = {}) => ({ id: 'x' + dept, name: dept, dept, leader: false, atk: 10, def: 60, med: 80, cmb: 80, maxhp: 100, hp: 100, range: 1.6, spd: 2.4, ...extra });
+  const bt = new RaidBattle({ defenders: [solo('defencer')], plan: { types: ['grunt'] }, day: 1, seed: 5 }); const D = bt.units[0], E = bt.units[1]; D.x = 10; D.y = 4; E.x = 11.5; E.y = 4; D.abCd = 0; D.cd = 99; E.cd = 99; const ex = E.x; bt.tick(0.1); assert.ok(E.x > ex + 1.5 && E.stun > 0, '밀치기: 뒤로 밀리고 기절');
+  const hb = new RaidBattle({ defenders: [solo('medical'), solo('rager', { hp: 30 })], plan: { types: ['grunt'] }, day: 1, seed: 5 }); hb.units[0].abCd = 0; hb.units[2].x = 20; hb.units[2].cd = 99; hb.units[0].x = 2; hb.units[1].x = 3; const h0 = hb.units[1].hp; hb.tick(0.1); assert.ok(hb.units[1].hp > h0, '치유');
+  const sb = new RaidBattle({ defenders: [solo('rager')], plan: { types: ['grunt', 'grunt'] }, day: 1, seed: 5 }); const [R0, G1, G2] = sb.units; R0.x = 10; R0.y = 4; R0.abCd = 0; R0.cd = 99; G1.x = 11; G1.y = 4; G2.x = 11.6; G2.y = 4.2; G1.cd = G2.cd = 99; const g2 = G2.hp; sb.tick(0.1); assert.ok(G1.hp < G1.maxhp * 0.9 && G2.hp < g2, '강타: 주변 적에게도 피해');
+  // 진형: 공세는 공격력, 수비는 피해 경감
+  const fo = (f) => { let taken = 0, time = 0; for (let i = 1; i <= 30; i++) { const bt2 = new RaidBattle({ defenders: all.slice(0, 10), plan: planRaid(5, seq(i)), day: 5, seed: i, formation: f }); const r = bt2.finish(); taken += r.units.reduce((x, u) => x + (1 - u.ratio), 0); time += bt2.t; } return { taken, time }; };
+  const bal = fo('balanced'), grd = fo('guard'), asl = fo('assault'); assert.ok(grd.taken < bal.taken && bal.taken < asl.taken * 1.15, `수비는 받는 피해가 적다(${grd.taken.toFixed(1)} < ${bal.taken.toFixed(1)})`); assert.ok(asl.time < grd.time, '공세는 더 빨리 끝낸다'); assert.ok(FORMATIONS.assault.atk > 1 && FORMATIONS.guard.def > 1);
+  // 병력이 없으면 즉시 패배
+  assert.equal(new RaidBattle({ defenders: [], plan, day: 1, seed: 1 }).finish().win, false);
+  // 시간 제한 안에 끝난다
+  assert.ok(a.t <= 150);
+});
+await t('긴급 습격 발생: 아침 1% / 밤 5%, 시간 정지, 하루 2회 제한, 사건과 겹치지 않음', () => {
+  Sim.RAIDS_ON = true; try {
+    const m = new Sim(null, () => 0.03); m.raid.acc = 59; m.setSpeed(1); m.advance(2); assert.equal(m.pendingRaid, null, '아침 3%는 1% 확률에 걸리지 않음');
+    const n = new Sim(null, () => 0.03); n.clock = 721; n.raid.acc = 59; n.setSpeed(1); n.advance(2); assert.ok(n.pendingRaid, '밤 3%는 5% 확률에 걸림'); assert.equal(n.speed, 0); n.setSpeed(2); assert.equal(n.speed, 0, '습격 중 재생 불가');
+    const clk = n.clock; n.advance(50); assert.equal(n.clock, clk, '정지');
+    assert.equal(n.startRaid(), null, '동시에 둘은 불가'); assert.ok(n.raid.today === 1);
+    const cap = new Sim(null, () => 0); cap.raid.today = 2; cap.raid.acc = 59; cap.setSpeed(1); cap.advance(2); assert.equal(cap.pendingRaid, null, '하루 최대 2회');
+    const late = new Sim(null, () => 0); late.clock = 21 * 60 - 30; late.raid.acc = 59; late.setSpeed(1); late.advance(2); assert.equal(late.pendingRaid, null, '하루 끝 60분 전부터는 없음');
+    const ev = new Sim(null, () => 0); ev.startEvent('op1'); ev.raid.acc = 59; ev.speed = 1; ev.tickRaids(60); assert.equal(ev.pendingRaid, null, '사건 중에는 습격 없음');
+    const r = new Sim(null, () => 0); r.startRaid(); r.ev.acc = 59; r.tickEvents(60); assert.equal(r.pendingEvent, null, '습격 중에는 사건 없음');
+  } finally { Sim.RAIDS_ON = false; }
+});
+await t('긴급 습격 정산: 승리=전리품·평판·사기, 패배=약탈·평판 감소, 다시 도전, 임무 중 인원 불참, 보고서 기록, 저장/복원', () => {
+  const s = new Sim(null, () => 0.5), plan = { types: ['grunt', 'grunt', 'brute', 'archer', 'grunt'] }; s.setSpeed(2); s.sendMission('c01', 'op1'); s.byId.c02.hp = 60;
+  const p = s.startRaid(plan); assert.ok(p && s.speed === 0 && s.raid.resume === 2); const info = s.raidInfo(); assert.equal(info.size, 5); assert.deepEqual(info.comp, { grunt: 3, brute: 1, archer: 1 }); assert.equal(info.defenders.length, 24); assert.deepEqual(info.away, ['한서윤'], '임무 중인 인원은 불참');
+  const b1 = s.raidBattle('guard'); assert.equal(b1.defenders.length, 24); assert.ok(!b1.defenders.some((d) => d.id === 'c01')); assert.equal(s.raidInfo().formation, 'guard'); const od = s.raidOdds('assault', 6); assert.ok(od >= 0 && od <= 1); assert.equal(s.raidInfo().formation, 'guard', '모의 전투는 선택한 진형을 바꾸지 않는다');
+  const hp0 = s.byId.c04.hp, f0 = s.funds, rep0 = s.rep, mor0 = s.byId.c04.mor;
+  // 확정 전에는 아무것도 바뀌지 않는다
+  b1.finish(); assert.equal(s.byId.c04.hp, hp0); assert.equal(s.funds, f0); assert.ok(s.pendingRaid);
+  const win = { win: true, defenders: 24, downed: ['c05'], units: [{ id: 'c04', ratio: 0.4, down: false }, { id: 'c05', ratio: 0, down: true }, { id: 'c02', ratio: 1, down: false }] };
+  const fin = s.finishRaid(win); assert.ok(fin.ok && fin.win && fin.loot === 2500 + 450 * 5); assert.equal(s.funds, f0 + fin.loot); assert.equal(s.rep, rep0 + 2); assert.equal(s.byId.c04.hp, 40); assert.equal(s.byId.c05.hp, 5); assert.equal(s.byId.c02.hp, 100); assert.equal(s.byId.c04.mor, mor0 + 6); assert.equal(s.byId.c01.hp, 100, '불참자는 그대로');
+  assert.equal(s.pendingRaid, null); assert.equal(s.dayLog.raids.length, 1); assert.deepEqual(s.dayLog.raids[0].downed, ['미라 볼코프']); assert.equal(s.buildReport(true).raids.length, 1); assert.equal(s.finishRaid(win).ok, false, '이미 끝난 습격');
+  // 패배 → 다시 도전 → 패배 수용
+  s.startRaid(plan); s.funds = 5000; const lose = { win: false, defenders: 24, downed: [], units: [{ id: 'c04', ratio: 0.1, down: false }] }; const sd0 = s.pendingRaid.seed; assert.equal(s.retryRaid().tries, 1); assert.equal(s.pendingRaid.tries, 1); const bA = s.raidBattle('balanced'); assert.equal(s.pendingRaid.seed, sd0, '같은 습격(시드 유지)'); assert.ok(bA.units[0].x !== b1.units[0].x || bA.units[0].y !== b1.units[0].y, '다시 도전하면 전투 전개가 달라진다');
+  const rep1 = s.rep, fin2 = s.finishRaid(lose); assert.equal(fin2.loss, 5000, '약탈은 보유 자금을 넘지 않는다'); assert.equal(s.funds, 0); assert.equal(s.rep, rep1 - 3); assert.equal(s.dayLog.raids[1].tries, 1); assert.equal(s.dayLog.raids[1].win, false);
+  // 임무 중인 인원이 모두 불참이면 병력 없음 → 즉시 패배
+  const z = new Sim(null, () => 0.5); for (const u of z.units) { u.mode = 'mission'; u.phase = 'away'; u.away = true; } z.startRaid(plan); assert.equal(z.raidInfo().defenders.length, 0); const zb = z.raidBattle(); assert.equal(zb.finish().win, false);
+  // 저장/복원
+  const q = new Sim(null, () => 0.5); q.startRaid(plan); q.retryRaid(); q.raidBattle('assault'); q.raid.today = 1; const snap = JSON.parse(JSON.stringify(q.serialize())); const r = new Sim(snap, () => 0.5); assert.deepEqual(r.pendingRaid, q.pendingRaid); assert.equal(r.speed, 0); assert.equal(r.raid.today, 1); assert.equal(r.pendingRaid.formation, 'assault'); assert.equal(r.raidBattle().defenders.length, 25);
+  const bad = JSON.parse(JSON.stringify(snap)); bad.raid.pending.types = ['dragon']; assert.equal(new Sim(bad, () => 0.5).pendingRaid, null); const bad2 = JSON.parse(JSON.stringify(snap)); bad2.raid = { pending: { types: [], seed: 'x' }, today: 99 }; const b2 = new Sim(bad2, () => 0.5); assert.equal(b2.pendingRaid, null); assert.equal(b2.raid.today, 2);
+  const old = JSON.parse(JSON.stringify(snap)); delete old.raid; assert.equal(new Sim(old, () => 0.5).pendingRaid, null, '옛 저장에서도 정상');
+  // 다음 날: 카운터 초기화
+  const d = new Sim(null, () => 0.5); d.raid.today = 2; d.nextDay(d.buildReport()); assert.equal(d.raid.today, 0);
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
