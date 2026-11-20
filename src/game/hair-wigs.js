@@ -16,7 +16,8 @@ function w1(cv, view) {
   const spikes = (cv, vs, a0, a1, len, o = {}) => { for (let i = 0; i < vs.length; i++) lockSym(cv, 7.4, vs[i], a0 + (a1 - a0) * (i / Math.max(1, vs.length - 1)), len + (i % 2), -1.2, 2.6, { curv2: -5, ...o }); };
   if (view === 'down') {
     cv.mass(ell(0, 1, 9.1, 6.4), -6, 8, { clip: FACE_FRONT }); sides(5.4, 8.2, 6, 9, cv);
-    cv.braid(-8.6, 8, 16, 4.2, { accMid: true, accTip: 0.82, taper: 0.35 });
+    cv.braid(-8.6, 8, 22, 4.2, { accMid: true, accTip: 0.86, taper: 0.4 });
+    fanSym(cv, { n: 1, x0: 8.6, y0: 30, x1: 8.6, y1: 30, a0: 86, a1: 86, len0: 5, len1: 5, curv: 0, w: 2.6, acc: true, seed: 71 });
     spikes(cv, [1, 3.5, 6, 8.5], 40, 70, 5);
     fanSym(cv, { n: 4, x0: 0.6, y0: -2.5, x1: 5.8, y1: -1, a0: 97, a1: 76, len0: 7.5, len1: 6, curv: -1.0, w: 3, seed: 3 });
     cv.lock(6.5, -4, 124, 15, 1.2, 4.4, { acc: true, taper: 0.6 });  // 이마를 오른쪽 위에서 왼쪽 아래로 가로지르는 굵은 은색 가닥
@@ -32,12 +33,14 @@ function w1(cv, view) {
     lockSym(cv, 4.5, -2.5, 106, 13, 0.8, 4, { acc: true, taper: 0.6 });
     spikes(cv, [2, 5, 8], 50, 75, 5);
     fanSym(cv, { n: 4, x0: 1.5, y0: 10.5, x1: 8, y1: 10, a0: 94, a1: 66, len0: 4.5, len1: 5, curv: -1.6, curv2: -4, w: 3.2, seed: 4 });
-    cv.braid(-3, 9, 17, 4.2, { accMid: true, accTip: 0.82, taper: 0.35 });
+    cv.braid(-3, 9, 21, 4.2, { accMid: true, accTip: 0.86, taper: 0.4 });
+    cv.lock(-3, 30, 92, 5, 0, 2.6, { acc: true });
     cv.lock(0.2, -4, 270, 9, 20, 1.8);
   } else {
     cv.mass(ell(-1.4, 1.2, 9.6, 6.6), -6, 8, { clip: FACE_SIDE });
     cv.mass(ell(-4.8, 7.4, 5.4, 5), 2, 12.5, { clip: FACE_SIDE });
-    cv.braid(-8, 10, 16, 4.2, { accMid: true, accTip: 0.82, taper: 0.35 });
+    cv.braid(-8, 10, 20, 4.2, { accMid: true, accTip: 0.86, taper: 0.4 });
+    cv.lock(-8, 30, 94, 5, 0, 2.6, { acc: true });
     fan(cv, { n: 5, x0: -9.5, y0: 1, x1: -6, y1: 11, a0: 150, a1: 118, len0: 4.5, len1: 5, curv: 1.8, curv2: 5, w: 3, seed: 6 });
     fan(cv, { n: 4, x0: 2, y0: -2.5, x1: 6, y1: -0.5, a0: 84, a1: 62, len0: 7.5, len1: 6, curv: -1.2, w: 3, seed: 7 });
     cv.lock(5.5, -4, 112, 14, 1.0, 4.2, { acc: true, taper: 0.6 });
@@ -59,7 +62,8 @@ function w2(cv, view) {
     fanSym(cv, { n: 3, x0: 7.6, y0: 8, x1: 10.8, y1: 10.5, a0: 56, a1: 32, len0: 5.5, len1: 7, curv: -1.0, curv2: -4, w: 4.2, accTip: 0.35, seed: 11 });
     fanSym(cv, { n: 3, x0: 5.6, y0: 2, x1: 8.6, y1: 5, a0: 76, a1: 54, len0: 7, len1: 8, curv: -1.0, curv2: -4.5, w: 3.2, accTip: 0.55, seed: 12 });
     fanSym(cv, { n: 4, x0: 0.6, y0: -2.5, x1: 5.6, y1: -1, a0: 98, a1: 78, len0: 7, len1: 6, curv: -0.9, curv2: -2.5, w: 3, seed: 13 });
-    cv.lock(-0.8, -3, 62, 12, 1.6, 3.2, { taper: 0.7 });          // 한쪽으로 쓸어 넘긴 앞머리 한 줄
+    cv.lock(-4, -3.5, 58, 13, 1.5, 4.4, { taper: 0.55 });          // 한쪽으로 쓸어 넘긴 굵은 앞머리
+    lockSym(cv, 6.4, 3, 94, 12, 0.3, 3.2, { accTip: 0.5, taper: 0.7 });   // 뺨을 덮는 옆 가닥
     cv.lock(0, -4.5, 270, 3.5, 12, 2.6);
   } else if (view === 'up') {
     cv.mass(ell(0, 3.4, 8.6, 8.6), -5, 12.5);
@@ -106,7 +110,9 @@ function w3(cv, view) {
     fanSym(cv, { n: 4, x0: 0.5, y0: -2, x1: 5.8, y1: -0.5, a0: 98, a1: 78, len0: 7, len1: 6, curv: -1.0, curv2: -2, w: 3.4, taper: 0.9, seed: 22 });
     cv.lock(0.3, -2, 92, 10, 0.4, 3.4, { taper: 0.9 });
     fanSym(cv, { n: 4, x0: 0.6, y0: -5.5, x1: 7, y1: -2.5, a0: 98, a1: 40, len0: 9, len1: 6.5, curv: -0.8, curv2: -2.5, w: 3.8, taper: 0.9, seed: 53 });
-    cv.lock(0.5, -4, 262, 10, 24, 2.2);
+    cv.lock(0.5, -4, 262, 12, 22, 3);
+    cv.lock(3, -4.5, 300, 6, 10, 2.4);
+    gaps(cv, [-4, -1.5, 1.5, 4], -1, 6, 0.3);
   } else if (view === 'up') {
     cv.mass(ell(0, 3, 9.6, 9.4), -6, 12);
     fanSym(cv, { n: 5, x0: 0.6, y0: -5, x1: 7.5, y1: -1, a0: 100, a1: 45, len0: 10, len1: 8, curv: -0.6, curv2: -2, w: 3.8, taper: 0.9, seed: 54 });
