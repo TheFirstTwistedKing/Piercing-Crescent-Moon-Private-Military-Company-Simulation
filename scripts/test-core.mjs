@@ -427,27 +427,31 @@ await t('단체 임무: 저장/복원(진행 중 유지), 손상된 저장은 �
   const bad3 = JSON.parse(JSON.stringify(snap)); bad3.groups[0].ids = ['c10', 'c13']; assert.ok(ids.every((i) => new Sim(bad3, () => 0.5).byId[i].mode === 'idle'), '인원 수 불일치 → 해제');
   const old = JSON.parse(JSON.stringify(snap)); delete old.groups; delete old.gseq; assert.ok(new Sim(old, () => 0.5)); const bad4 = JSON.parse(JSON.stringify(snap)); bad4.units.c10.mission.id = 'zzz'; assert.equal(new Sim(bad4, () => 0.5).byId.c10.mode, 'idle', '모르는 임무 id');
 });
-await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개, 공방별 20개, 티어가 오를수록 비용·성능 증가', () => {
+await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개(공방별 20개), 티어 표기 없음, 무기마다 모양이 모두 다르다', () => {
   assert.deepEqual(WORKSHOPS.map((w) => w.name), ['마그마 인더스트리 공방', '아크 공방', '웨폰 & 아머 디벨롭 인더스트리 공방']);
   assert.equal(WORKSHOP_WEAPONS.length, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.id)).size, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.name)).size, 60, '이름 고유');
+  assert.ok(WORKSHOP_WEAPONS.every((w) => !('tier' in w) && !/Mk\./.test(w.name + w.desc)), '티어/Mk 표기 없음');
   for (const wk of WORKSHOPS) assert.equal(WORKSHOP_WEAPONS.filter((w) => w.workshop === wk.id).length, 20, wk.id);
   const types = WEAPONS.filter((w) => w.id !== 'frostblade'); assert.equal(types.length, 12);
   for (const ty of types) {
-    const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id).sort((a, b) => a.tier - b.tier); assert.equal(set.length, 5, ty.id); assert.deepEqual(set.map((w) => w.tier), [1, 2, 3, 4, 5]);
-    for (let i = 1; i < 5; i++) { assert.ok(set[i].fee > set[i - 1].fee && set[i].upkeep > set[i - 1].upkeep, `${ty.id} 티어가 오르면 비용 증가`); }
-    assert.ok(new Set(set.map((w) => w.workshop)).size >= 2, '한 종류의 5개는 여러 공방에 걸쳐 있다');
+    const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); assert.equal(set.length, 5, ty.id); assert.ok(new Set(set.map((w) => w.workshop)).size >= 2, '한 종류의 5개는 여러 공방에 걸쳐 있다');
+    const by = set.slice().sort((a, b) => a.pw - b.pw); for (let i = 1; i < 5; i++) assert.ok(by[i].pw >= by[i - 1].pw && by[i].fee >= by[i - 1].fee && by[i].upkeep >= by[i - 1].upkeep, `${ty.id} 강한 무기일수록 비용이 높다`);
   }
   assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade'), '서리 대검은 공방 종류가 아님');
-  for (const w of WORKSHOP_WEAPONS) { assert.ok(w.fee >= 2000 && w.upkeep >= 100 && w.name && w.desc && WEAPON[w.id] === w); assert.ok(Object.values(w.fx).every((v) => typeof v === 'boolean' || Number.isFinite(v))); }
+  for (const w of WORKSHOP_WEAPONS) { assert.ok(w.fee >= 2000 && w.upkeep >= 100 && w.name && w.desc && WEAPON[w.id] === w && w.pw >= 1 && w.pw <= 5); assert.ok(Object.values(w.fx).every((v) => typeof v === 'boolean' || Number.isFinite(v))); }
   // 공방 성향: 마그마=근력·한파 무시, 아크=기술·안개 무시·순찰 안전, 웨폰&아머=방어·부상 경감
-  const m5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma' && w.tier === 5), a5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'arc' && w.tier === 5), d5 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'wad' && w.tier === 5), m1 = WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma' && w.tier === 1);
-  assert.ok(m5.fx.str >= 4 && m5.fx.coldProof && !m1.fx.coldProof); assert.ok(a5.fx.skl >= 4 && a5.fx.fogProof && a5.fx.patrolSafe); assert.ok(d5.fx.def >= 4 && d5.fx.dmg < 0 && d5.fx.rest > 0);
-  // 그리기: 모든 공방 무기를 세 방향으로 그려도 오류 없이 기본 무기와 다른 색을 쓴다
-  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const calls = []; drawWeapon((c, x, y, ww, hh) => calls.push(c), view, w.id); assert.ok(calls.length > 0, w.id); assert.ok(calls.every((c) => /^#[0-9a-f]{6}$/.test(c)), w.id + ' 색 형식'); }
-  const base = [], ws = []; drawWeapon((c) => base.push(c), 'down', 'longsword'); drawWeapon((c) => ws.push(c), 'down', WORKSHOP_WEAPONS.find((w) => w.base === 'longsword' && w.workshop === 'magma').id); assert.notDeepEqual(base, ws, '공방 색상 적용');
+  const top = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 5), low = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 1);
+  assert.ok(top('magma').fx.str >= 4 && top('magma').fx.coldProof && !low('magma').fx.coldProof); assert.ok(top('arc').fx.skl >= 4 && top('arc').fx.fogProof && top('arc').fx.patrolSafe); assert.ok(top('wad').fx.def >= 4 && top('wad').fx.dmg < 0 && top('wad').fx.rest > 0);
+  // 모양: 기본 13종 + 공방 60종의 윤곽(색 무시)이 모두 다르고, 같은 종류 안에서는 6픽셀 이상 다르며, 어느 방향에서도 셀 밖으로 나가지 않는다
+  const mask = (id, view = 'down') => { const cells = new Set(); drawWeapon((c, x, y, ww, hh) => { assert.ok(/^#[0-9a-f]{6}$/.test(c), id + ' 색 형식'); for (let i = 0; i < ww; i++) for (let j = 0; j < hh; j++) cells.add(`${x + i},${y + j}`); }, view, id); return cells; };
+  const all = [...WEAPONS, ...WORKSHOP_WEAPONS], sig = all.map((w) => [...mask(w.id)].sort().join(';')); assert.equal(new Set(sig).size, all.length, '모든 무기의 윤곽이 다르다');
+  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const m = mask(w.id, view); assert.ok(m.size > 0, w.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x < 32 && y >= 0 && y < 24, `${w.name} ${view} 범위 밖 ${c}`); } }
+  for (const ty of types) { const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) { const a = mask(set[i].id), b = mask(set[j].id); let d = 0; for (const c of a) if (!b.has(c)) d++; for (const c of b) if (!a.has(c)) d++; assert.ok(d >= 6, `${set[i].name} / ${set[j].name} 윤곽 차이 ${d}px`); } }
+  // 공방별 색 계열이 서로 다르다
+  const cols = (id) => { const s = new Set(); drawWeapon((c) => s.add(c), 'down', id); return [...s].join(); }; assert.notEqual(cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma').id), cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'arc').id));
 });
 await t('공방 무기 착용: 착용비 즉시 지불, 유지비는 매일 운영비에 포함, 기본 무기로 바꾸면 중단, 저장/복원', () => {
-  const s = new Sim(null, () => 0.5), w = WORKSHOP_WEAPONS.find((x) => x.id === 'magma_greatsword_4'), u = s.byId.c04, up0 = s.buildReport(true).upkeep, f0 = s.funds;
+  const s = new Sim(null, () => 0.5), w = WORKSHOP_WEAPONS.find((x) => x.name === '마그마 그레이트소드'), u = s.byId.c04, up0 = s.buildReport(true).upkeep, f0 = s.funds;
   assert.equal(s.setWeapon('c04', w.id).ok, false, '일반 무기 교체로는 공방 무기를 얻을 수 없다'); assert.equal(u.weapon, 'battleaxe');
   const s0 = u.fx.str, r = s.equipWorkshop('c04', w.id); assert.ok(r.ok); assert.equal(u.weapon, w.id); assert.equal(s.funds, f0 - w.fee); assert.equal(s.dayLog.fees, w.fee); assert.equal(u.fx.str, s0 - 3 + w.fx.str, '능력치 반영(기존 도끼 근력 -3, 새 무기 +)'); assert.ok(u.fx.coldProof, '한파 무시');
   assert.equal(s.buildReport(true).upkeep - up0, w.upkeep, '유지비가 운영비에 더해짐'); assert.equal(s.buildReport(true).weaponUpkeep, w.upkeep); assert.equal(s.buildReport(true).workshopFees, w.fee);
@@ -456,7 +460,7 @@ await t('공방 무기 착용: 착용비 즉시 지불, 유지비는 매일 운�
   const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, () => 0.5); assert.equal(x.byId.c04.weapon, w.id); assert.equal(x.funds, s.funds, '복원해도 착용비를 다시 내지 않음'); assert.equal(x.weaponUpkeep(), w.upkeep);
   assert.ok(s.setWeapon('c04', 'rapier').ok); assert.equal(s.weaponUpkeep(), 0, '기본 무기로 바꾸면 유지비 중단'); assert.equal(s.buildReport(true).upkeep, up0);
   // 자금 부족 / 없는 무기
-  const p = new Sim(null, () => 0.5), big = WORKSHOP_WEAPONS.find((x) => x.tier === 5); p.funds = big.fee - 1; assert.equal(p.equipWorkshop('c04', big.id).ok, false); assert.equal(p.funds, big.fee - 1); assert.equal(p.byId.c04.weapon, 'battleaxe'); assert.equal(p.equipWorkshop('c04', 'laser').ok, false); assert.equal(p.equipWorkshop('c04', 'battleaxe').ok, false);
+  const p = new Sim(null, () => 0.5), big = WORKSHOP_WEAPONS.find((x) => x.pw === 5); p.funds = big.fee - 1; assert.equal(p.equipWorkshop('c04', big.id).ok, false); assert.equal(p.funds, big.fee - 1); assert.equal(p.byId.c04.weapon, 'battleaxe'); assert.equal(p.equipWorkshop('c04', 'laser').ok, false); assert.equal(p.equipWorkshop('c04', 'battleaxe').ok, false);
   // 여러 명이 착용하면 유지비가 합산된다
   const q = new Sim(null, () => 0.5); q.funds = 1e6; const a = WORKSHOP_WEAPONS[0], b = WORKSHOP_WEAPONS[7]; q.equipWorkshop('c01', a.id); q.equipWorkshop('c02', b.id); assert.equal(q.weaponUpkeep(), a.upkeep + b.upkeep);
   // 손상된 저장: 모르는 공방 무기 id 는 기존 무기 유지

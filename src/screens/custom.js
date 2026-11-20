@@ -81,7 +81,7 @@ export function mountCustom(root, ctx, arg) {
   const confirmEquip = (w) => {
     const u = U(); if (u.weapon === w.id) return; const left = sim.funds - w.fee, prev = WEAPON[u.weapon];
     modal({ title: `${w.name} 착용`, body: h('div', { class: 'wk-confirm' },
-      h('p', {}, `착용자: ${u.name}`), h('p', {}, `무기: ${w.name} (${WORKSHOPS.find((x) => x.id === w.workshop).short} 공방 Mk.${w.tier})`),
+      h('p', {}, `착용자: ${u.name}`), h('p', {}, `무기: ${w.name} (${WORKSHOPS.find((x) => x.id === w.workshop).short} 공방)`),
       h('p', { class: 'wk-cost' }, `착용비 ${fmtCredits(w.fee)} — 지금 한 번 지불`), h('p', { class: 'wk-cost' }, `일일 유지비 ${fmtCredits(w.upkeep)} — 착용하는 동안 매일 운영비에 더해짐`),
       prev?.upkeep ? h('p', { class: 'wk-cost' }, `기존 ${prev.name}의 유지비 ${fmtCredits(prev.upkeep)}는 사라집니다.`) : null,
       h('p', { class: `wk-cost ${left < 0 ? 'bad' : ''}` }, left < 0 ? `자금이 부족합니다. (보유 ${fmtCredits(sim.funds)})` : `착용 후 자금 ${fmtCredits(left)}`)),
@@ -97,7 +97,7 @@ export function mountCustom(root, ctx, arg) {
       h('div', { class: 'wk-head', style: `--wk:${wk.color}` }, h('b', {}, wk.name), h('small', {}, wk.desc), h('p', { class: 'wk-fund' }, `보유 자금 ${fmtCredits(sim.funds)} · 착용할 때 착용비를 내고, 착용하는 동안 매일 유지비가 듭니다.`)),
       h('div', { class: 'grid wp-grid' }, ...list.map((w) => { const on = u.weapon === w.id, poor = sim.funds < w.fee;
         return h('button', { type: 'button', class: `card wp wk ${on ? 'on' : ''} ${poor && !on ? 'poor' : ''}`, style: `--wk:${wk.color}`, 'aria-pressed': String(on), onclick: () => { if (on) return; Audio.sfx('click'); confirmEquip(w); } },
-          wIcon(w.id), h('b', {}, w.name, h('em', { class: 'wk-mk' }, `Mk.${w.tier}`)), h('small', {}, `${WEAPON[w.base].name} · ${wk.short}`), fxList(w.fx),
+          wIcon(w.id), h('b', {}, w.name), h('small', {}, `${WEAPON[w.base].name} · ${wk.short}`), fxList(w.fx),
           h('p', { class: 'wk-price' }, h('span', {}, `착용비 ${fmtCredits(w.fee)}`), h('span', {}, `유지비 ${fmtCredits(w.upkeep)}/일`)), on ? h('i', { class: 'wk-on' }, '착용 중') : null); })));
   };
 
