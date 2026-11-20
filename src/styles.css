@@ -291,3 +291,30 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
   #holo::before, #holo::after, .noise, .rec, .mod.due .mod-no, .intro-gate small { animation: none !important; } #holo::after { display: none; }
   .screen, .toast, .modal-back { animation: none !important; } .roster, .sheet, .mod { transition: none !important; }
 }
+
+/* ── 사건(이벤트) 창 ──
+   시각 안전: 번쩍임·플래시 없음. 등장은 0.25초 페이드, 글자 나타나기는 초당 약 30회 갱신(점멸이 아닌 누적 표시), 모션 최소화 시 즉시 표시. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ev-back { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: var(--top) var(--s4) var(--bot); background: rgba(2, 3, 6, .82); animation: enter .25s both; overflow-y: auto; }
+.ev { width: min(620px, 100%); max-height: calc(100dvh - var(--top) - var(--bot)); overflow-y: auto; padding: var(--s6); display: grid; gap: var(--s3); border-color: var(--line2); }
+.ev h2 { font: 700 24px/1.3 var(--ui); }
+.ev-tag { justify-self: start; font: 500 11px/1 var(--mono); letter-spacing: .14em; padding: 5px 8px; border: 1px solid var(--amber); color: var(--amber); }
+.ev-text { color: var(--ink2); font-size: 15px; line-height: 1.8; min-height: 5.4em; cursor: default; }
+.ev-picked { color: var(--ink); font-weight: 600; }
+.ev-choices { display: grid; gap: var(--s2); opacity: 0; pointer-events: none; transform: translateY(4px); transition: opacity .3s, transform .3s; }
+.ev-choices.ready { opacity: 1; pointer-events: auto; transform: none; }
+.ev-choice { text-align: left; display: grid; gap: var(--s1); padding: var(--s3) var(--s4); min-height: 48px; background: transparent; border: 0; box-shadow: inset 0 0 0 1px var(--line2); cursor: pointer; }
+.ev-choice:hover:not(:disabled), .ev-choice:focus-visible { box-shadow: inset 0 0 0 1px var(--amber); background: rgba(255, 178, 62, .06); }
+.ev-choice:disabled { opacity: .45; cursor: not-allowed; }
+.ev-c-label { font-weight: 600; }
+.ev-c-meta { display: flex; gap: var(--s3); flex-wrap: wrap; font: 500 12px/1.4 var(--mono); color: var(--ink3); }
+.ev-c-meta em { font-style: normal; } .ev-c-meta em.bad, .ev-chips .bad, .ev-verdict.bad { color: var(--red); }
+.ev-chips { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s2); transition: opacity .3s; } .ev-chips.hide { opacity: 0; }
+.ev-chips li { font: 500 12px/1 var(--mono); padding: 6px 8px; box-shadow: inset 0 0 0 1px var(--line2); } .ev-chips .good, .ev-verdict.good { color: var(--green); }
+.ev-verdict { font: 600 13px/1.4 var(--mono); letter-spacing: .06em; }
+.ev-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s2); } .ev-foot small { color: var(--ink3); font-size: 12px; }
+.ev-chip { position: fixed; z-index: 70; left: var(--s4); bottom: var(--bot); display: flex; align-items: center; gap: var(--s3); max-width: calc(100vw - 2 * var(--s4)); min-height: 44px; padding: var(--s2) var(--s4); background: rgba(8, 12, 18, .97); border: 1px solid var(--amber); color: var(--ink); cursor: pointer; animation: enter .25s both; }
+.ev-chip i { width: 8px; height: 8px; background: var(--amber); flex: none; } .ev-chip span { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ev-chip small { color: var(--ink3); font: 500 11px/1 var(--mono); flex: none; }
+.ev-chip:hover { background: rgba(255, 178, 62, .12); }
+@media (max-width: 480px) { .ev { padding: var(--s5) var(--s4); } .ev h2 { font-size: 20px; } .ev-text { font-size: 14px; } .ev-chip small { display: none; } }
+@media (prefers-reduced-motion: reduce) { .ev-back, .ev-chip { animation: none !important; } .ev-choices, .ev-chips { transition: none !important; } }

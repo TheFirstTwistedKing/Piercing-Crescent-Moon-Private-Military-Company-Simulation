@@ -6,7 +6,7 @@ export function buildSpeed(sim) {
   const defs = [['pause', 0, '정지 (Space)'], ['play', 1, '재생 (1)'], ['fast', 2, '2배속 (2)'], ['fast3', 3, '3배속 (3)']];
   const el = h('div', { class: 'speed' }, ...defs.map(([ic, v, label]) => h('button', {
     class: 'icon-btn', type: 'button', 'data-s': v, 'aria-label': label, title: label, html: icon(ic, 18),
-    onclick: () => { if (v === 3 && !sim.research.speed3) { Audio.sfx('error'); paint(); return; } sim.setSpeed(v); Audio.sfx('click'); paint(); },
+    onclick: () => { if (v > 0 && sim.pendingEvent) { Audio.sfx('error'); document.dispatchEvent(new CustomEvent('pcm:open-event')); paint(); return; } if (v === 3 && !sim.research.speed3) { Audio.sfx('error'); paint(); return; } sim.setSpeed(v); Audio.sfx('click'); paint(); },
   })));
   const paint = () => el.querySelectorAll('button').forEach((b) => {
     const v = +b.dataset.s; b.classList.toggle('on', v === sim.speed);

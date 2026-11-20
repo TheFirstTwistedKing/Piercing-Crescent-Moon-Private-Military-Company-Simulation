@@ -14,6 +14,9 @@ import { ITEMS, ITEM, STAT_ITEMS, EQUIPMENT, CONSUMABLES, FURNITURE, ROOM_KEYS, 
 import { LEADER_IDS, LEADER_TALK, REQUEST_COST } from '../src/game/leaders.js';
 import { SLOTS, FURNACE, yardWorkTiles, isOutdoor } from '../src/game/map.js';
 import { ROSTER, DEPTS, MISSIONS, MISSION, MONO } from '../src/game/data.js';
+import { EVENTS, EVENT, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from '../src/game/events.js';
+
+Sim.EVENTS_ON = false;   // 기존 테스트는 무작위 사건 없이 진행(사건 테스트에서 따로 켠다)
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
 
@@ -280,5 +283,84 @@ await t('팀장: 부서마다 고정 1명, 대화(보고·격려·지원 요청)
   assert.equal(L.fx.succ <= mate.fx.succ, true, '팀장 본인은 감화 대상 아님'); assert.equal(L.aura, 0);
   const x = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(x.leaderUnit('rager').aff, 2); assert.equal(x.talkLeader('rager', 'encourage').ok, false, '하루 1회 상태도 저장');
   s.nextDay(s.buildReport()); assert.ok(s.talkLeader('rager', 'encourage').ok, '다음 날 다시 가능');
+});
+await t('이벤트 데이터: 부서마다 3건 + 날씨 3건, 효과·판정·아이템이 모두 유효', () => {
+  assert.equal(EVENTS.length, 27); assert.equal(new Set(EVENTS.map((e) => e.id)).size, 27);
+  for (const d of DEPTS) assert.equal(EVENTS.filter((e) => e.dept === d.key).length, 3, d.key);
+  assert.equal(EVENTS.filter((e) => !e.dept).length, 3);
+  const FXK = new Set(['str', 'def', 'skl', 'cha', 'chm', 'wis', 'succ', 'night', 'day', 'reward', 'dmg', 'heal', 'speed', 'rep', 'mor', 'rest']);
+  for (const e of EVENTS) {
+    assert.ok(e.choices.length >= 2 && e.choices.length <= 3, e.id); assert.ok(!/\{(?!n\}|L\}|best\})/.test(e.text), e.id + ' 알 수 없는 치환자');
+    for (const c of e.choices) {
+      const outs = c.check ? [c.ok, c.fail] : [c.out]; assert.ok(outs.every(Boolean), e.id + ' 결과 누락');
+      if (c.check) assert.ok(['cmb', 'def', 'mob', 'med', 'int'].includes(c.check.stat) && c.check.diff > 30 && c.check.diff < 150, e.id);
+      for (const o of outs) { assert.ok(o.t.length > 10, e.id); for (const f of o.fx) {
+        const [k, v, a] = f; assert.ok(['funds', 'rep', 'mor', 'hp', 'item', 'research', 'aff', 'snow', 'buff'].includes(k), e.id + ' ' + k);
+        if (k === 'item') assert.ok(ITEM[v], e.id + ' 없는 아이템 ' + v); if (k === 'buff') assert.ok(a && Object.keys(v).every((x) => FXK.has(x)), e.id + ' 버프');
+        if (k === 'mor' || k === 'hp') assert.ok([undefined, 'dept', 'unit', 'all'].includes(a), e.id); assert.ok(fxChip(f, (id) => ITEM[id].name).t.length > 2);
+      } }
+    }
+  }
+  assert.equal(fxChip(['funds', -300]).good, false); assert.equal(fxChip(['hp', 5, 'all']).t, '전원 HP +5'); assert.equal(fxChip(['snow', -35]).good, true);
+});
+await t('이벤트 엔진: 조건·가중치·쿨다운, 시작하면 시간이 멈추고 속도 변경이 막힌다', () => {
+  Sim.EVENTS_ON = true; try {
+    const s = new Sim(null, () => 0.5); assert.equal(s.pendingEvent, null);
+    s.weather.today = 'clear'; s.clock = 0; s.snow = 10; const ids = new Set(); for (let i = 0; i < 60; i++) { const r = Math.random; const x = new Sim(null, () => (i + 0.5) / 60); x.weather.today = 'clear'; x.snow = 10; const d = x.startEvent(); ids.add(d.id); }
+    assert.ok(!ids.has('ge1') && !ids.has('ge2') && !ids.has('ge3') && !ids.has('df1') && !ids.has('df2'), '조건(밤·한파·안개·적설) 불충족 사건은 제외');
+    const def = s.startEvent('op1'); assert.equal(def.id, 'op1'); assert.equal(s.speed, 0); s.setSpeed(2); assert.equal(s.speed, 0, '사건 중 재생 불가'); assert.equal(s.startEvent('op2'), null, '동시에 둘은 불가');
+    const v = s.eventView(); assert.equal(v.title, '봉인된 서한'); assert.equal(v.choices.length, 3); assert.ok(v.text.includes(s.leaderUnit('operation').name) && !v.text.includes('{'));
+    assert.ok(v.choices[0].check.chance >= 0.1 && v.choices[0].check.chance <= 0.95); assert.equal(v.choices[2].cost, 500);
+    s.funds = 100; assert.equal(s.eventView().choices[2].disabled, true); assert.equal(s.chooseEvent(2).ok, false, '자금 부족'); assert.equal(s.chooseEvent(9).ok, false); assert.ok(s.pendingEvent);
+    s.funds = 1000; const f0 = s.funds, r = s.chooseEvent(1); assert.ok(r.ok && r.chips.length && r.text); assert.equal(s.pendingEvent, null); assert.equal(s.dayLog.events.length, 1); assert.equal(s.dayLog.events[0].title, '봉인된 서한');
+    s.setSpeed(2); assert.equal(s.speed, 2);
+    s.nextDay(s.buildReport()); assert.equal(s.ev.today, 0);
+    // 쿨다운: 같은 사건은 EV_COOLDOWN 일 안에 다시 뽑히지 않는다
+    const c = new Sim(null, () => 0.5); c.ev.cd.op1 = c.day; assert.equal(c.evEligible(EVENT.op1), false); c.day += EV_COOLDOWN; assert.equal(c.evEligible(EVENT.op1), true);
+  } finally { Sim.EVENTS_ON = false; }
+});
+await t('이벤트 엔진: 게임 시간 1시간마다 판정, 하루 최대 건수·종료 직전 제한, 일시정지 중엔 발생하지 않음', () => {
+  Sim.EVENTS_ON = true; try {
+    const s = new Sim(null, () => 0.0); s.setSpeed(1);                                            // rand=0 → 항상 발생
+    s.advance(40); assert.ok(s.pendingEvent, '게임 1시간(실시간 약 34초) 지나면 첫 사건'); assert.equal(s.speed, 0); assert.equal(s.ev.today, 1);
+    const clk = s.clock; s.advance(100); assert.equal(s.clock, clk, '정지 중엔 시간이 흐르지 않는다');
+    for (let i = 0; i < 6; i++) { s.chooseEvent(0); s.setSpeed(2); s.advance(120); if (!s.pendingEvent) break; }
+    assert.ok(s.ev.today <= EV_MAX_PER_DAY, '하루 최대 ' + EV_MAX_PER_DAY + '건');
+    const n = new Sim(null, () => 0.99); n.setSpeed(3); n.advance(DAY_REAL_SECONDS); assert.equal(n.pendingEvent, null, '확률 밖이면 사건 없음'); assert.ok(n.ended);
+    const e = new Sim(null, () => 0.0); e.clock = 21 * 60 - 60; e.ev.acc = 59; e.setSpeed(1); e.advance(5); assert.equal(e.pendingEvent, null, '하루 끝 90분 전부터는 사건이 열리지 않는다');
+    const d = new Sim(null, () => 0.0); d.setSpeed(1); d.advance(40); assert.ok(d.pendingEvent); const open = d.pendingEvent.id; d.nextDay(d.buildReport()); assert.equal(d.pendingEvent, null, '결정하지 않은 사건은 하루가 넘어가면 사라진다'); assert.ok(d.log.some((l) => l.text.includes('흘러갔다')) && open);
+  } finally { Sim.EVENTS_ON = false; }
+});
+await t('이벤트 선택: 비용·판정(성공/실패)·효과(자금·평판·사기·HP·아이템·연구·친밀도·적설·버프)가 정확히 적용된다', () => {
+  const mk = (rand, id) => { const s = new Sim(null, rand); s.startEvent(id); return s; };
+  // 판정 성공(rand=0) / 실패(rand=0.999)
+  let s = mk(() => 0, 'op1'); const f0 = s.funds, rep0 = s.rep; let r = s.chooseEvent(0); assert.equal(r.passed, true); assert.equal(s.funds, f0 + 3200); assert.equal(s.rep, rep0 + 1); assert.ok(r.chips.some((c) => c.t === '자금 +3,200 CR' || c.t.startsWith('자금 +3200')));
+  s = mk(() => 0.999, 'op1'); const hp0 = s.byId.c01.hp; r = s.chooseEvent(0); assert.equal(r.passed, false); assert.ok(r.chips.some((c) => !c.good));
+  // 비용 지불 + 소모
+  s = mk(() => 0.5, 'op1'); s.funds = 5000; s.chooseEvent(2); assert.ok(s.funds <= 4500 + 1000 && s.funds >= 4500 - 0, '비용 500 지불'); 
+  // 아이템 / 연구 포인트
+  s = mk(() => 0, 'md2'); const k0 = s.owned('cs_medkit'); s.funds = 9999; s.chooseEvent(1); assert.ok(s.owned('cs_medkit') >= k0 + 1, '성공 시 응급 키트');
+  s = mk(() => 0.5, 'op3'); const p0 = s.research.points; s.funds = 5000; s.chooseEvent(2); assert.equal(s.research.points, p0 + 1);
+  // 팀장 친밀도: rg1 3번 선택지(성공)
+  s = mk(() => 0, 'rg1'); const L = s.leaderUnit('rager'); s.chooseEvent(2); assert.equal(L.aff, 1);
+  // 적설
+  s = mk(() => 0.5, 'ge3'); s.snow = 80; s.chooseEvent(0); assert.equal(s.snow, 45);
+  // 사기/HP 범위(전원·부서·당사자): 0~100, HP 는 5 아래로 내려가지 않는다
+  s = mk(() => 0.999, 'md1'); for (const u of s.units) { u.hp = 10; u.mor = 3; } s.chooseEvent(2); for (const u of s.units) { assert.ok(u.hp >= 5 && u.hp <= 100 && u.mor >= 0 && u.mor <= 100); }
+  s = mk(() => 0.5, 'rg1'); const dept = s.units.filter((u) => u.dept === 'rager'), others = s.units.filter((u) => u.dept !== 'rager'); const m0 = others.map((u) => u.mor); s.chooseEvent(0); assert.ok(dept.every((u) => u.mor >= 60 - 0) , '부서 사기 +6'); assert.deepEqual(others.map((u) => u.mor), m0, '다른 부서는 영향 없음');
+  // 버프: 오늘 하루만, 해당 부서에만, 저장/복원, 다음 날 해제
+  s = mk(() => 0.5, 'df2'); s.funds = 9999; const guard = s.units.find((u) => u.dept === 'defencer'), other = s.units.find((u) => u.dept === 'rager'); const d0 = guard.fx.def, dm0 = guard.fx.dmg, o0 = other.fx.def; s.chooseEvent(0);
+  assert.equal(guard.fx.def, d0 + 1); assert.ok(Math.abs(guard.fx.dmg - (dm0 - 0.05)) < 1e-9, '피해 감소 버프'); assert.equal(other.fx.def, o0); assert.equal(s.ev.buffs.length, 1);
+  const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, () => 0.5); assert.equal(x.ev.buffs.length, 1); assert.equal(x.units.find((u) => u.id === guard.id).fx.def, d0 + 1);
+  s.nextDay(s.buildReport()); assert.equal(s.ev.buffs.length, 0); assert.equal(guard.fx.def, d0, '다음 날 버프 해제');
+  // 보고서에 사건 기록
+  s = mk(() => 0.5, 'op2'); s.chooseEvent(2); const rep = s.buildReport(true); assert.equal(rep.events.length, 1); assert.equal(rep.events[0].title, '장부의 구멍'); assert.ok(rep.events[0].text.length > 10 && Array.isArray(rep.events[0].chips));
+});
+await t('이벤트 저장/복원: 대기 중 사건·쿨다운·카운터 보존, 잘못된 값 무시', () => {
+  const s = new Sim(null, () => 0.5); s.startEvent('rq3'); s.ev.acc = 30; const snap = JSON.parse(JSON.stringify(s.serialize()));
+  const r = new Sim(snap, () => 0.5); assert.equal(r.pendingEvent.id, 'rq3'); assert.equal(r.speed, 0); assert.equal(r.ev.cd.rq3, s.day); assert.equal(r.ev.today, 1); assert.equal(r.ev.acc, 30); assert.equal(r.eventView().title, EVENT.rq3.title);
+  const bad = JSON.parse(JSON.stringify(snap)); bad.ev = { pending: { id: 'nope', who: 'zzz' }, cd: { op1: 'x', nope: 3 }, today: 99, acc: -5, buffs: [{ fx: { str: 99, hack: 1, def: 1 }, label: 'a'.repeat(50), dept: 'zzz' }, null] };
+  const b = new Sim(bad, () => 0.5); assert.equal(b.pendingEvent, null); assert.deepEqual(b.ev.cd, {}); assert.equal(b.ev.today, EV_MAX_PER_DAY); assert.equal(b.ev.acc, 0); assert.equal(b.ev.buffs.length, 1); assert.deepEqual(b.ev.buffs[0].fx, { def: 1 }); assert.equal(b.ev.buffs[0].label.length, 30); assert.equal(b.ev.buffs[0].dept, null);
+  const old = JSON.parse(JSON.stringify(snap)); delete old.ev; delete old.dayLog.events; const o = new Sim(old, () => 0.5); assert.equal(o.pendingEvent, null); assert.equal(o.buildReport(true).events.length, 0, '옛 저장에도 안전');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

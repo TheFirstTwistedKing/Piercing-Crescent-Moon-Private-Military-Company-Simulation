@@ -18,6 +18,7 @@ import { mountResearch } from './screens/research.js';
 import { mountShop } from './screens/shop.js';
 import { mountLeader } from './screens/leader.js';
 import { engine } from './game/engine.js';
+import { installEventHost } from './screens/events.js';
 
 import * as Session from './core/session.js';
 import { deviceId } from './core/device.js';
@@ -113,6 +114,7 @@ async function doRoute(force) {
   document.body.dataset.screen = hash.replace('#/', '').replace('/', '-');
 }
 addEventListener('hashchange', () => route());
+installEventHost();
 
 // 엔진 이벤트 → 토스트 (한 번만 등록)
 engine.onToast((e) => { if (e.kind !== 'quiet') toast(e.text, e.kind === 'info' ? 'info' : e.kind); });
