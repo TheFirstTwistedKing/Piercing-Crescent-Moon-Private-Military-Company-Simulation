@@ -59,13 +59,24 @@ export function drawWeapon(r, view, id0) {
   const [cx, hy] = view === 'down' ? [13, 16] : view === 'up' ? [3, 16] : [11, 16];
   for (const [dx, dy, wd, ht, col] of w.parts) r(col, cx + dx, hy + dy, wd, ht);
 }
+/** 긴 총은 셀 밖으로 나가지 않도록 손(그립) 위치를 몸 쪽으로 반 칸 단위로 당긴다. 총 그리기와 손 그리기가 같은 값을 쓴다. */
+export function gunHandX(w, view) {
+  const a = w.art, base = view === 'down' ? 12 : view === 'up' ? 3 : 10, px = a.px2; if (!px) return base;
+  if (a.hx === undefined) a.hx = {};
+  if (a.hx[view] !== undefined) return a.hx[view];
+  const mx = Math.max(...px.map((q) => q[0])), mn = Math.min(...px.map((q) => q[0]));
+  let hx = base;
+  if (view === 'up') { const left = base + 0.5 - (mx + 1) / 2; if (left < -8.5) hx = base + Math.ceil((-8.5 - left) * 2) / 2; const right = hx + 0.5 - mn / 2; if (right > 24.5) hx -= Math.ceil((right - 24.5) * 2) / 2; }
+  else { const right = base + (mx + 1) / 2; if (right > 24.5) hx = base - Math.ceil((right - 24.5) * 2) / 2; const left = hx + mn / 2; if (left < -8.5) hx += Math.ceil((-8.5 - left) * 2) / 2; }
+  return (a.hx[view] = hx);
+}
 /** 공방 무기(도트 설계): hand=손에 든 무기, shield / gauntlet=격자 */
 function drawArt(r, view, w) {
   const c = (role) => w.pal[role] || '#ff00ff', a = w.art;
   if (a.kind === 'shield') { const [x, bottom] = view === 'down' ? [0, 17] : view === 'up' ? [5, 16] : [9, 17], y = bottom - a.h + 1; for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }   // 바닥선을 맞추고 크기는 무기마다 다르다
   if (a.kind === 'gauntlet') { const cx = a.w >> 1, hands = view === 'side' ? [8 - cx] : [3 - cx, 12 - cx], y = 18 - a.h; for (const x of hands) for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }
   if (a.kind === 'gun') {   // 옆모습 총: 앞/옆 모습에서는 총구가 오른쪽, 뒷모습에서는 왼쪽(좌우 반전). 2배 해상도 도안(반 칸 단위)이 있으면 그것으로 그린다.
-    const [hx, hy, dir] = view === 'down' ? [12, 15, 1] : view === 'up' ? [3, 15, -1] : [10, 15, 1];
+    const [hx0, hy, dir] = view === 'down' ? [12, 15, 1] : view === 'up' ? [3, 15, -1] : [10, 15, 1], hx = gunHandX(w, view);
     if (!a.rects2) a.rects2 = a.px2 ? toRects(a.px2) : null;
     if (a.rects2) { for (const [gx, gy, wd, , role] of a.rects2) r(c(role), dir > 0 ? hx + gx / 2 : hx + 0.5 - (gx + wd) / 2, hy + gy / 2, wd / 2, 0.5); return; }
     for (const [gx, gy, role] of a.px) r(c(role), hx + dir * gx, hy + gy, 1, 1);
@@ -89,12 +100,12 @@ export function iconRects(id0) {
   else for (const [dx, dy, wd, ht, col] of w.parts) fill(col, 8 + dx, 16 + dy, wd, ht);
   return out;
 }
-/** 2배 해상도 아이콘(32×40)에 그릴 사각형 [색, x, y, w, h] — 총기는 반 칸 도안, 나머지는 iconRects 를 2배로 */
+/** 2배 해상도 아이콘(48×40)에 그릴 사각형 [색, x, y, w, h] — 총기는 반 칸 도안, 나머지는 iconRects 를 2배로 */
 export function iconRects2(id0) {
   const w = WEAPON[id0];
   if (w.art?.kind === 'gun' && w.art.px2) {
     const col = (role) => w.pal[role] || '#ff00ff', px = w.art.px2, xs = px.map((q) => q[0]), ys = px.map((q) => q[1]);
-    const ox = Math.floor((32 - (Math.max(...xs) - Math.min(...xs) + 1)) / 2) - Math.min(...xs), oy = Math.floor((40 - (Math.max(...ys) - Math.min(...ys) + 1)) / 2) - Math.min(...ys);
+    const ox = Math.floor((48 - (Math.max(...xs) - Math.min(...xs) + 1)) / 2) - Math.min(...xs), oy = Math.floor((40 - (Math.max(...ys) - Math.min(...ys) + 1)) / 2) - Math.min(...ys);
     return toRects(px).map(([x, y, wd, ht, role]) => [col(role), ox + x, oy + y, wd, ht]);
   }
   return iconRects(id0).map(([col, x, y, wd, ht]) => [col, x * 2, y * 2, wd * 2, ht * 2]);
@@ -102,7 +113,7 @@ export function iconRects2(id0) {
 const iconCache = new Map();
 export function weaponIcon(id0) {
   if (iconCache.has(id0)) return iconCache.get(id0);
-  const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 40 }); const c = cv.getContext('2d');
+  const cv = Object.assign(document.createElement('canvas'), { width: 48, height: 40 }); const c = cv.getContext('2d');
   for (const [col, x, y, wd, ht] of iconRects2(id0)) { c.fillStyle = col; c.fillRect(x, y, wd, ht); }
   iconCache.set(id0, cv); return cv;
 }

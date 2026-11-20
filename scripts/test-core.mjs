@@ -447,7 +447,7 @@ await t('공방 무기: 3개 공방 × 18종류(근접 12 + 총기 6) × 5개 = 
   // 모양: 기본 13종 + 공방 60종의 윤곽(색 무시)이 모두 다르고, 같은 종류 안에서는 6픽셀 이상 다르며, 어느 방향에서도 셀 밖으로 나가지 않는다
   const mask = (id, view = 'down') => { const cells = new Set(); drawWeapon((c, x, y, ww, hh) => { assert.ok(/^#[0-9a-f]{6}$/.test(c), id + ' 색 형식'); for (let i = 0; i < ww; i++) for (let j = 0; j < hh; j++) cells.add(`${x + i},${y + j}`); }, view, id); return cells; };
   const all = [...WEAPONS, ...WORKSHOP_WEAPONS], sig = all.map((w) => [...mask(w.id)].sort().join(';')); assert.equal(new Set(sig).size, all.length, '모든 무기의 윤곽이 다르다');
-  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const m = mask(w.id, view); assert.ok(m.size > 0, w.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= -8 && x < 24 && y >= 0 && y < 24, `${w.name} ${view} 범위 밖 ${c}`); } }
+  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const m = mask(w.id, view); assert.ok(m.size > 0, w.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= -9 && x < 25 && y >= -1 && y < 25, `${w.name} ${view} 범위 밖 ${c}`); } }
   for (const ty of types) { const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) { const a = mask(set[i].id), b = mask(set[j].id); let d = 0; for (const c of a) if (!b.has(c)) d++; for (const c of b) if (!a.has(c)) d++; assert.ok(d >= 6, `${set[i].name} / ${set[j].name} 윤곽 차이 ${d}px`); } }
   // 공방별 색 계열이 서로 다르다
   const cols = (id) => { const s = new Set(); drawWeapon((c) => s.add(c), 'down', id); return [...s].join(); }; assert.notEqual(cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma').id), cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'arc').id));
@@ -652,8 +652,8 @@ await t('2배 해상도 총기 도안: 모든 총기에 반 칸 도안(px2)이 �
   const guns = [...WEAPONS, ...WORKSHOP_WEAPONS].filter((w) => w.art?.kind === 'gun'); assert.equal(guns.length, 36);
   for (const w of guns) {
     assert.ok(Array.isArray(w.art.px2) && w.art.px2.length > w.art.px.length, `${w.name} px2`);
-    for (const [x, y, role] of w.art.px2) { assert.ok(w.pal[role], `${w.name} 역할 ${role} 색 누락`); assert.ok(x >= -40 && x < 24 && y >= -30 && y < 14, `${w.name} 총기가 셀 밖 (${x},${y})`); }
-    const xs = w.art.px2.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 32, `${w.name} 길이 32반칸 이내`);
+    for (const [x, y, role] of w.art.px2) { assert.ok(w.pal[role], `${w.name} 역할 ${role} 색 누락`); assert.ok(x >= -48 && x < 40 && y >= -30 && y < 14, `${w.name} 총기가 셀 밖 (${x},${y})`); }
+    const xs = w.art.px2.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 48, `${w.name} 길이 48반칸 이내`);
   }
   const sig = (w) => w.art.px2.map((q) => q.join(',')).sort().join(';'); assert.equal(new Set(guns.map(sig)).size, guns.length, '총기마다 2배 도안도 모두 다르다');
 });

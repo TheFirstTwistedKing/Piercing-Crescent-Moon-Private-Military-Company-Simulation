@@ -1,6 +1,7 @@
 // 공방 무기 90개: 3개 공방 × 18가지 무기 종류(근접 12 + 총기 6). 종류마다 5개이며 무기마다 모양(도트)이 모두 다르다. (티어 번호 없음)
 // 착용할 때 착용비(fee)를 한 번 내고, 착용하는 동안 매일 유지비(upkeep)가 운영비에 더해진다.
 // pw 는 화면에 표시되지 않는 내부 강도(1~5): 성능·착용비·유지비를 정하는 데만 쓰인다.
+import { WORKSHOP_GUNS } from './gun-art3.js';
 import { swordPixels, headPixels, gridPixels, toRects, gunArt, PALETTES, GUN_PALETTES } from './weapon-art.js';
 
 export const WORKSHOPS = [
@@ -148,10 +149,10 @@ function hints(o) {   // 검류 외형 설명(자동)
   if (o.g === 'gear') a.push('톱니바퀴 가드'); if (o.g === 'crown') a.push('왕관 가드'); if (o.g === 'disc') a.push('원반 가드'); if (o.g === 'spike') a.push('가시 가드'); if (o.g === 'wing') a.push('날개 가드');
   return a.slice(0, 3);
 }
-function buildArt(a) {
+function buildArt(a, name) {
   if (a.k === 'sword') return { kind: 'hand', rects: toRects(swordPixels(a.o)) };
   if (a.k === 'head') return { kind: 'hand', rects: toRects(headPixels(a)) };
-  if (a.k === 'gun') return gunArt(a.o);
+  if (a.k === 'gun') return gunArt(a.o, WORKSHOP_GUNS[name]);
   return { kind: a.k, px: gridPixels(a.rows), w: Math.max(...a.rows.map((r) => r.length)), h: a.rows.length };   // shield | gauntlet
 }
 
@@ -161,6 +162,6 @@ export function buildWorkshopWeapons(types) {
   return CATALOG.map(([ty, wid, name, pw, art]) => {
     const T = TY[ty], wk = WORKSHOP[wid], mul = CLASS_MUL[ty] || 1, n = (count[`${wid}${ty}`] = (count[`${wid}${ty}`] || 0) + 1), tip = art.k === 'sword' ? hints(art.o) : [];
     return { id: `${wid}_${ty}_${n}`, name, desc: [`${T.name} · ${wk.short} 공방`, ...tip].join(' · '), base: ty, workshop: wid, pw,
-      fee: Math.round((FEE[pw - 1] * mul) / 100) * 100, upkeep: Math.round((UPKEEP[pw - 1] * mul) / 10) * 10, fx: workshopFx(wid, pw, T.fx), parts: [], art: buildArt(art), pal: art.k === 'gun' ? GUN_PALETTES[wid] : PALETTES[wid], ...(T.gun ? { gun: { ...T.gun } } : {}) };
+      fee: Math.round((FEE[pw - 1] * mul) / 100) * 100, upkeep: Math.round((UPKEEP[pw - 1] * mul) / 10) * 10, fx: workshopFx(wid, pw, T.fx), parts: [], art: buildArt(art, name), pal: art.k === 'gun' ? GUN_PALETTES[wid] : PALETTES[wid], ...(T.gun ? { gun: { ...T.gun } } : {}) };
   }).sort((a, b) => types.findIndex((t) => t.id === a.base) - types.findIndex((t) => t.id === b.base) || a.pw - b.pw);
 }

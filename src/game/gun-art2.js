@@ -2,7 +2,9 @@
 // B 몸체 · H 밝은 면 · D 어두운 면 · K 어두운 금속 · L 가장 어두움(홈·구멍) · Y 반사광 · W/a/b 나무(기본/밝음/어두움) · T/c/d 황동(기본/밝음/어두움)
 // E 발광 · G 렌즈 · R 탄두 · O 올리브 도장. anchor = 손(손잡이) 칸의 왼쪽 위 반 칸 좌표 — 1칸 도안(gunBuild().px)과 같은 손 위치.
 const ROLE = { a: 'Wh', b: 'Wd', c: 'Tl', d: 'Td' };
-const make = (rows, anchor) => { const px = []; const W = Math.max(...rows.map((r) => r.length)); rows = rows.map((r) => r.padEnd(W, '.')); rows.forEach((line, y) => [...line].forEach((ch, x) => { if (ch !== '.') px.push([x - anchor[0], y - anchor[1], ROLE[ch] || ch]); })); return px; };
+export const make = (rows, anchor) => { const px = []; const W = Math.max(...rows.map((r) => r.length)); rows = rows.map((r) => r.padEnd(W, '.')); rows.forEach((line, y) => [...line].forEach((ch, x) => { if (ch !== '.') px.push([x - anchor[0], y - anchor[1], ROLE[ch] || ch]); })); px.ax = anchor[0]; return px; };
+/** 총열처럼 균일한 구간의 열을 n 칸 덜어 길이를 줄인다(손그림 도안의 col 번째 열부터). */
+export const trim = (px, col, n) => { const out = []; for (const [x, y, r] of px) { const c = x + px.ax; if (c >= col && c < col + n) continue; out.push([c >= col + n ? x - n : x, y, r]); } out.ax = px.ax; return out; };
 
 export const HAND_GUNS = {
   pistol: make([
