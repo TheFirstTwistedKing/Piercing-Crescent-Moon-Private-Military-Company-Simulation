@@ -7,6 +7,7 @@ import { LEADER_IDS, LEADER_SET, LEADER_TALK, AFF_MAX, REQUEST_COST } from './le
 import { WEAPON } from './weapons.js';
 import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
 import { HAIR } from './hair.js';
+import { RaidBattle, planRaid, defenderFrom, RAID_CHANCE, FORMATIONS, ENEMY_TYPES } from './raid.js';
 import { EVENTS, EVENT, EV_CHANCE, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from './events.js';
 import { RESEARCH_BY_KEY, freshResearch } from './research.js';
 import { CSTATS, STAT_MAX, randomPool, sumAlloc, autoAlloc, emptyAlloc, sumFx, clampStat, derive } from './rules.js';
@@ -68,6 +69,7 @@ export class Sim {
     this.inv = {}; this.placed = Object.fromEntries(ROOM_KEYS.map((k) => [k, Array(FURN_SLOTS).fill(null)]));
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
     this.groups = {}; this.gseq = 0;
+    this.raid = { pending: null, acc: 0, today: 0, on: Sim.RAIDS_ON, resume: 0 };
     this.ev = { pending: null, cd: {}, today: 0, acc: 0, buffs: [], on: Sim.EVENTS_ON, resume: 0 };
     this.listeners = {}; this.dirty = false;
     this.syncSlots();
@@ -85,7 +87,7 @@ export class Sim {
     if (toast && !this.quiet) this.emit('toast', e);
     this.dirty = true;
   }
-  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [], fees: 0 }; }
+  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [], fees: 0, raids: [] }; }
 
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
 
@@ -199,6 +201,56 @@ export class Sim {
   }
 
 
+  /* ── 긴급 습격 ──
+     게임 1시간마다 아침 1% / 밤 5% 확률로 무법자가 기지를 덮친다(하루 최대 2회). 시간이 멈추고, 그 시각 기지에 있는 병력(임무 중인 인원 제외)이 맞서 싸운다.
+     전투 결과는 확정(finishRaid)할 때만 반영되므로, 지면 '다시 도전'으로 같은 습격을 다시 치를 수 있다. */
+  tickRaids(dm) {
+    const R = this.raid; if (!R.on || R.pending || this.ev.pending) return;
+    R.acc += dm;
+    while (R.acc >= 60) {
+      R.acc -= 60;
+      if (R.today >= 2 || this.clock >= DAY_MINUTES - 60) continue;
+      if (this.rand() < (this.clock >= DAY_PHASE_MIN ? RAID_CHANCE.day * 5 : RAID_CHANCE.day)) { this.startRaid(); return; }
+    }
+  }
+  startRaid(plan = null) {
+    const R = this.raid; if (R.pending) return null;
+    plan = plan || planRaid(this.day, this.rand);
+    R.pending = { size: plan.types.length, types: plan.types.slice(), seed: 1 + Math.floor(this.rand() * 1e9), day: this.day, tries: 0, formation: 'balanced' }; R.today++; R.resume = this.speed; this.speed = 0;
+    this.note(`긴급 습격! 무법자 ${plan.types.length}명이 기지를 덮쳤다.`, 'alert', false); this.emit('raid', R.pending); this.dirty = true; return R.pending;
+  }
+  get pendingRaid() { return this.raid.pending; }
+  raidDefenders() { return this.units.filter((u) => u.mode !== 'mission' && !u.away); }
+  /** 화면용 정보: 적 구성, 참전 가능 인원/불참 인원 */
+  raidInfo() {
+    const p = this.raid.pending; if (!p) return null;
+    const comp = {}; for (const t of p.types) comp[t] = (comp[t] || 0) + 1;
+    const def = this.raidDefenders(), away = this.units.filter((u) => !def.includes(u));
+    return { size: p.size, comp, tries: p.tries, formation: p.formation, defenders: def.map((u) => ({ id: u.id, name: u.name, dept: u.dept, hp: Math.round(u.hp), leader: u.isLeader })), away: away.map((u) => u.name) };
+  }
+  /** remember=false 면 진형을 저장하지 않는다(모의 전투용) */
+  raidBattle(formation = this.raid.pending?.formation || 'balanced', seedOffset = 0, remember = true) {
+    const p = this.raid.pending; if (!p) return null; const f = FORMATIONS[formation] ? formation : p.formation; if (remember) p.formation = f;
+    return new RaidBattle({ defenders: this.raidDefenders().map(defenderFrom), plan: { types: p.types }, formation: f, day: p.day, seed: p.seed + p.tries * 7919 + seedOffset });
+  }
+  /** 모의 전투로 예상 승률을 어림한다(실제 전투와 같은 로직, 시드만 다름) */
+  raidOdds(formation, runs = 16) { let w = 0; for (let i = 0; i < runs; i++) { const b = this.raidBattle(formation, 100003 * (i + 1), false); if (b.finish().win) w++; } return w / runs; }
+  retryRaid() { const p = this.raid.pending; if (!p) return { ok: false, reason: '진행 중인 습격이 없습니다.' }; p.tries++; return { ok: true, tries: p.tries }; }
+  /** 전투 결과 확정: 승리하면 전리품·평판, 패배를 받아들이면 약탈 피해. 참전자의 체력은 전투 결과대로 반영된다. */
+  finishRaid(result) {
+    const p = this.raid.pending; if (!p || !result) return { ok: false, reason: '진행 중인 습격이 없습니다.' };
+    const size = p.size, rec = new Map((result.units || []).map((x) => [x.id, x]));
+    for (const u of this.units) { const r = rec.get(u.id); if (!r) continue; u.hp = r.down ? 5 : Math.max(5, Math.min(100, Math.round(r.ratio * 100))); u.mor = Math.max(0, Math.min(100, u.mor + (result.win ? 6 : -10))); }
+    let loot = 0, loss = 0;
+    if (result.win) { loot = 2500 + 450 * size; this.funds += loot; this.rep += 2; }
+    else { loss = Math.min(this.funds, 3000 + 700 * size); this.funds -= loss; this.rep -= 3; }
+    const downed = (result.downed || []).map((id) => this.byId[id]?.name).filter(Boolean);
+    this.dayLog.raids.push({ clock: Math.floor(this.clock), size, win: !!result.win, loot, loss, tries: p.tries, defenders: result.defenders || 0, downed, formation: FORMATIONS[p.formation]?.ko || '균형' });
+    this.note(`긴급 습격 ${result.win ? '격퇴' : '패배'} — 무법자 ${size}명${loot ? ` · 전리품 +${loot.toLocaleString('ko-KR')} CR` : ''}${loss ? ` · 약탈 -${loss.toLocaleString('ko-KR')} CR` : ''}${downed.length ? ` · 쓰러진 인원 ${downed.length}명` : ''}`, result.win ? 'good' : 'bad', false);
+    this.raid.pending = null; this.refresh(); this.emit('raid', null);
+    return { ok: true, win: !!result.win, loot, loss, resume: this.raid.resume };
+  }
+
   /* ── 이벤트 엔진 ──
      게임 1시간마다 EV_CHANCE 확률로 사건이 터지고(하루 최대 EV_MAX_PER_DAY건), 시간이 멈춘 채 선택을 기다린다.
      선택지는 비용·능력치 판정(부서에서 해당 능력치가 가장 높은 인원이 나선다)·결과 효과로 이루어진다. */
@@ -229,7 +281,7 @@ export class Sim {
     return def;
   }
   tickEvents(dm) {
-    if (!this.ev.on || this.ev.pending) return;
+    if (!this.ev.on || this.ev.pending || this.raid.pending) return;
     this.ev.acc += dm;
     while (this.ev.acc >= 60) {
       this.ev.acc -= 60;
@@ -490,7 +542,7 @@ export class Sim {
   }
 
   /* ── 진행 ── */
-  setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended || this.ev.pending) s = 0; this.speed = s; }
+  setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended || this.ev.pending || this.raid.pending) s = 0; this.speed = s; }
 
   /** 실제 시간 sec 초만큼 한꺼번에 진행(백그라운드에서 돌아왔을 때 따라잡기). 하루가 끝나거나 정지 상태면 멈춘다. */
   advance(sec) {
@@ -506,6 +558,7 @@ export class Sim {
     if (this.clock >= DAY_MINUTES) { this.clock = DAY_MINUTES; this.ended = true; this.speed = 0; this.note('하루가 종료되었습니다. 오늘의 보고서를 제출하세요.', 'alert'); this.emit('dayend'); }
     for (const u of this.units) this.updateUnit(u, dt, dm);
     this.tickGroups(dm);
+    this.tickRaids(dm);
     this.tickEvents(dm);
   }
 
@@ -680,7 +733,7 @@ export class Sim {
     const injured = this.units.filter((u) => u.hp < 50).map((u) => ({ name: u.name, hp: Math.round(u.hp) }));
     const m = L.missions;
     const summary = `임무 ${m.length}건(성공 ${m.filter((x) => x.result === 'success').length}, 부분 ${m.filter((x) => x.result === 'partial').length}, 실패 ${m.filter((x) => x.result === 'fail').length}), 순찰 ${L.patrols.length}회, 명령 ${L.orders}건. 수입 ${fmtCredits(income)}, 운영비 ${fmtCredits(-upkeep)}.`;
-    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), workshopFees: L.fees || 0, weaponUpkeep: this.weaponUpkeep(), depts, injured, summary };
+    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), raids: (L.raids || []).slice(), workshopFees: L.fees || 0, weaponUpkeep: this.weaponUpkeep(), depts, injured, summary };
   }
 
   /** 보고서 제출 후 다음 날로 */
@@ -695,7 +748,7 @@ export class Sim {
       u.mode = 'idle'; u.phase = null; u.mission = null; u.patrol = null; u.work = null; u.away = false; u.heard.clear();
       const s = this.spot(u.home); u.place(s[0], s[1]);
     }
-    this.groups = {};
+    this.groups = {}; this.raid.today = 0; this.raid.acc = 0; this.raid.pending = null;
     this.weather = { today: this.weather.next, next: rollWeather(this.rand) }; this.snow = dailySnow(this.snow, this.weather.today);
     this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
@@ -707,7 +760,7 @@ export class Sim {
   serialize() {
     const units = {};
     for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, raid: { pending: this.raid.pending, today: this.raid.today, acc: Math.round(this.raid.acc) }, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
@@ -726,6 +779,11 @@ export class Sim {
     this.ev.pending = ev.pending && EVENT[ev.pending.id] && this.byId[ev.pending.who] ? { id: ev.pending.id, who: ev.pending.who } : null;
     this.ev.buffs = (Array.isArray(ev.buffs) ? ev.buffs : []).filter((b) => b && b.fx && typeof b.fx === 'object').slice(0, 12).map((b) => ({ fx: Object.fromEntries(Object.entries(b.fx).filter(([k, v]) => FXK.includes(k) && Number.isFinite(v) && Math.abs(v) <= 5)), label: String(b.label || '').slice(0, 30), dept: DEPT[b.dept] ? b.dept : null }));
     if (this.ev.pending) this.speed = 0;
+    const rd = s.raid || {}, rp = rd.pending;
+    this.raid.today = Math.max(0, Math.min(2, Math.floor(rd.today || 0))); this.raid.acc = Math.max(0, Math.min(59, Number(rd.acc) || 0));
+    this.raid.pending = rp && Array.isArray(rp.types) && rp.types.length >= 1 && rp.types.length <= 40 && rp.types.every((t) => ENEMY_TYPES[t]) && Number.isFinite(rp.seed)
+      ? { size: rp.types.length, types: rp.types.slice(), seed: Math.floor(rp.seed), day: Math.max(1, Math.floor(rp.day || this.day)), tries: Math.max(0, Math.min(99, Math.floor(rp.tries || 0))), formation: FORMATIONS[rp.formation] ? rp.formation : 'balanced' } : null;
+    if (this.raid.pending) this.speed = 0;
     for (const [id, st] of Object.entries(s.units || {})) {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
@@ -758,5 +816,6 @@ export class Sim {
     this.refresh();
   }
 }
+Sim.RAIDS_ON = true;    // 테스트에서 false 로 끄면 무작위 습격이 발생하지 않는다
 Sim.EVENTS_ON = true;   // 테스트에서 false 로 끄면 무작위 사건이 발생하지 않는다
 export { DEPTS, DEPT, ROOMS };

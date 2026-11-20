@@ -4,7 +4,7 @@ import { World } from './render.js';
 import { backend } from '../core/backend.js';
 import { assertHolder } from '../core/session.js';
 
-const listeners = new Set(), evListeners = new Set();
+const listeners = new Set(), evListeners = new Set(), raidListeners = new Set();
 export const engine = {
   sim: null, world: null, uid: null, running: false, raf: 0, last: 0, views: new Set(),
   lastWall: 0, bg: { sec: 0, game: 0, missions: 0, ended: false }, fps: 60, quality: 2, lastSave: 0, saving: false, cam: { cx: 28 * 16, cy: 18 * 16, zoom: 3 }, loaded: false,
@@ -19,6 +19,7 @@ export const engine = {
     this.world = new World();
     this.sim.on('toast', (e) => { for (const f of listeners) f(e); });
     this.sim.on('event', (p) => { for (const f of evListeners) f(p); });
+    this.sim.on('raid', (p) => { for (const f of raidListeners) f(p); });
     this.running = true; this.last = performance.now(); this.lastSave = this.last; this.loaded = true; this.lastWall = Date.now();
     const frame = (now) => {
       if (!this.running) return;
@@ -60,6 +61,7 @@ export const engine = {
   },
   onToast(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   onEvent(fn) { evListeners.add(fn); return () => evListeners.delete(fn); },
+  onRaid(fn) { raidListeners.add(fn); return () => raidListeners.delete(fn); },
   addView(fn) { this.views.add(fn); return () => this.views.delete(fn); },
   async save() {
     if (!this.sim || !this.uid || this.saving) return;

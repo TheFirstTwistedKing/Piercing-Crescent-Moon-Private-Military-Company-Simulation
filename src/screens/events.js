@@ -69,6 +69,7 @@ function pick(i) {
 }
 
 function sync() {
+  if (engine.running && engine.sim?.pendingRaid) { chipOff(); return; }   // 습격이 우선
   const sim = engine.sim, p = engine.running && sim ? sim.pendingEvent : null, onPanel = (document.body.dataset.screen || '').startsWith('panel');
   if (resultMode && back) return;
   if (!p || !onPanel) { chipOff(); if (back) closeNow(); if (!p) shown = null; return; }
