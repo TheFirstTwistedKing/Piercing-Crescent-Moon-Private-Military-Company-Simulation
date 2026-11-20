@@ -83,19 +83,26 @@ const upFrame = (frame) => {
 const SW_ = 21;
 const SIDE_HEAD = HEAD_DOWN.map((row, i) => row.slice(2, 8).replace(/[xuvywhO]/g, (c) => (c === 'O' && i < 8 ? 'O' : 's')) + row.slice(8, 16));
 const up1 = (blk) => blk.map((r, i) => blk[i + 1] || '.'.repeat(r.length));   // 발을 한 칸 들어 올린 다리 블록
+// 옆모습 다리: 템플릿 왼쪽 다리의 정강이(30~37행)를 그대로 쓰고, 샌들은 앞쪽(오른쪽)으로만 나온다.
+const LEG_SIDE = [...LEGS_DOWN.slice(0, 8).map((r) => r.slice(2, 9).padEnd(10, '.')), 'BCCCCBBBB.', 'BCCCBsssso', 'BBBBBBBBBB'];
+// 옆모습 몸통: 목(앞쪽 피부) · 뒤통수 쪽으로 올라온 후드 깃 · 겉옷 중앙. 지퍼(I)는 앞쪽(오른쪽) 가장자리로 옮긴다.
+const TORSO_SIDE = [
+  '...OsssO...', '..FFOssOFF.', '.FIGFOooOFF', '.FHIFsssFKF', 'FIHKFsssHKF', 'FGKHHFhFHKF', 'FKHKHKHHHKF', 'FFIHIHKHIFF',
+  ...TORSO_DOWN.slice(8).map((r) => r.slice(3, 14).split('').map((ch, k) => (k === 5 && ch === 'I' ? 'H' : k === 9 && ch === 'H' ? 'I' : ch)).join('')),
+];
 const sideFrame = (frame) => {
   const g = grid(SW_, 41), f1 = frame === 1 ? 2 : frame === 2 ? -2 : 0;
-  // 다리: 뒷다리 → 앞다리. 템플릿 한쪽 다리(7칸 폭)를 그대로 쓰고, 걸을 때는 크게 벌리고 뒷발을 든다.
-  const legB = LEGS_DOWN.map((r) => r.slice(2, 9)), legF = LEGS_DOWN.map((r) => r.slice(8, 15));
-  if (frame === 0) { put(g, legB, 7, 30); put(g, legF, 8, 30); }
-  else if (frame === 1) { put(g, up1(legB), 3, 30); put(g, legF, 11, 30); }
-  else { put(g, up1(legF), 11, 30); put(g, legB, 3, 30); }
-  // 몸통(겉옷 11칸 폭)
-  put(g, TORSO_DOWN.map((r) => r.slice(3, 14)), 5, 13);
+  // 다리: 뒷다리 → 앞다리. 걸을 때는 크게 벌리고 뒷발을 든다.
+  if (frame === 0) { put(g, LEG_SIDE, 5, 30); put(g, LEG_SIDE, 7, 30); }
+  else if (frame === 1) { put(g, up1(LEG_SIDE), 2, 30); put(g, LEG_SIDE, 9, 30); }
+  else { put(g, up1(LEG_SIDE), 9, 30); put(g, LEG_SIDE, 2, 30); }
+  // 몸통
+  put(g, TORSO_SIDE, 5, 13);
   // 팔: 템플릿 오른팔(소매 · 팔띠 · 손)을 몸 앞쪽에서 흔든다
   put(g, TORSO_DOWN.slice(8, 17).map((r) => r.slice(13, 17)), 8 + f1, 21);
-  // 머리 + 귀 + 코
-  put(g, SIDE_HEAD, 3, 1); put(g, ['oh', 'Oo', 'oh'], 6, 9); put(g, ['s', 's'], 17, 10); put(g, ['o', 'o'], 18, 10);
+  // 머리 + 귀 + 코(얼굴 앞 윤곽과 이어 붙인다)
+  put(g, SIDE_HEAD, 3, 1); put(g, ['oh', 'Oo', 'oh'], 6, 9);
+  put(g, ['s', 's'], 16, 12); put(g, ['s', 's'], 17, 12); put(g, ['o', 'o'], 18, 12); put(g, ['o'], 17, 11); put(g, ['o'], 17, 14);   // 코: 눈보다 아래
   return lines(g);
 };
 

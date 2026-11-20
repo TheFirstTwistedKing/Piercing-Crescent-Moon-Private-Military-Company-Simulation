@@ -58,6 +58,8 @@ export const HAIR_STYLES = [
   { id: 'f23', g: 'f', name: '하이 포니', v2: { top: 'slick', lift: 1, tail: { t: 'pony', n: 11 } } },
   { id: 'f24', g: 'f', name: 'A라인 보브', v2: { top: 'part', fr: 'side', sl: 3, bk: 3, flare: 3 } },
 ];
+// 헤어 템플릿 시트(첨부 이미지)에서 추출한 도안 스타일 30종 — 남녀 공용(g:'x'). A: 시트 2(8) · B/C: 시트 1(8+8) · D: 시트 4(6)
+for (const id of ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6']) HAIR_STYLES.push({ id, g: 'x', name: `템플릿 ${id.toUpperCase()}`, sheet: id });
 export const HAIR = Object.fromEntries(HAIR_STYLES.map((s) => [s.id, s]));
 
 // 자연색 + 염색색 견본

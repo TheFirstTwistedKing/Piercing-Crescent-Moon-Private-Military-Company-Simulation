@@ -1,6 +1,7 @@
 // 머리카락 2배 해상도 생성기(실제 픽셀 단위). 머리 크기는 첨부 도트 비율(큰 머리)에 맞춰 x 8..23, y 4..21 로 잡았다.
 // 스타일마다 정수리·앞머리·옆머리·뒷머리·묶음을 픽셀 단위로 쌓고, 뿌리→끝 그라데이션 + 위쪽 광택 + 가닥 무늬 + 아래쪽 그림자를 칠한다.
 // 좌표는 몸 기준 실제 픽셀(논리 칸 ×2). P(색, x, y, w, h) 로 그린다.
+import { SHEET_HAIR } from './hair-sheets.js';
 const hex = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const toHex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 const shade = (c, d) => toHex(hex(c).map((v) => v + d));
@@ -162,7 +163,20 @@ export function hairGrid(view, style) {
 }
 
 /** P(색, x, y, w, h): 실제 픽셀 사각형. 뿌리 col → 끝 tip 그라데이션은 y 가 아래일수록 tip 에 가깝게. */
+const LV = [-66, -38, 0, 26, 54];   // 템플릿 도안의 명도 단계(0 외곽선 … 4 광택) → 머리색 기준 밝기 변화
+/** 템플릿 시트 도안: 머리 중앙 x16(옆모습 15.5)에 가로 중심을 맞추고 정수리 y3 에 윗면을 맞춘다. */
+function drawSheetHair(P, view, style, col, tip) {
+  const sp = SHEET_HAIR[style.sheet]?.[view]; if (!sp || !sp.length) return;
+  const w = Math.max(...sp.map((r) => r.length)), x0 = Math.round((view === 'side' ? 15.5 : 16) - w / 2) + (style.dx || 0), y0 = 3 + (style.dy || 0), c0 = hex(col), t0 = tip ? hex(tip) : null;
+  sp.forEach((row, j) => {
+    const y = y0 + j; if (y < 0 || y > 47) return;
+    const cell = (i) => { const ch = row[i]; if (ch === undefined || ch === '.') return null; const base = t0 ? (() => { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); return c0.map((v, k) => v + (t0[k] - v) * tt); })() : c0; return toHex(base.map((v) => v + LV[+ch])); };
+    let i = 0; while (i < row.length) { const c = cell(i); if (!c) { i++; continue; } let e = i; while (e + 1 < row.length && cell(e + 1) === c) e++; const xa = x0 + i, xb = x0 + e; if (xb >= 0 && xa <= 31) P(c, Math.max(0, xa), y, Math.min(31, xb) - Math.max(0, xa) + 1, 1); i = e + 1; }
+  });
+}
+
 export function drawHair3(P, view, style, col, tip) {
+  if (style.sheet) return drawSheetHair(P, view, style, col, tip);
   const { g: vg } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
   // 설계 공간(머리 x8..23, 피부 y7..21)을 템플릿 머리로 옮긴다. 가로: 설계 x8..24 → 실제 앞/뒤 x9..23, 옆 x9..23.
   // 세로는 템플릿 눈높이에 맞춘 구간별 변환: 정수리(설계 y4→2.5) · 피부 윗면(7→5) · 앞머리 끝(10→11, 눈썹 바로 위) · 턱(21→17.5).
