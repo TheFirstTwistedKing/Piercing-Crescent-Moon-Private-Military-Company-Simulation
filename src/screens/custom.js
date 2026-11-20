@@ -65,7 +65,7 @@ export function mountCustom(root, ctx, arg) {
 
   const lookTab = () => {
     const u = U(), cur = u.look.hairStyle;
-    const seg = h('div', { class: 'seg' }, ...[['m', `남성 ${HAIR_STYLES.filter((x) => x.g === 'm').length}`], ['f', `여성 ${HAIR_STYLES.filter((x) => x.g === 'f').length}`]].map(([g, l]) => h('button', { type: 'button', class: `seg-b ${gtab === g ? 'on' : ''}`, onclick: () => { gtab = g; Audio.sfx('click'); paintPanel(); } }, l)));
+    const seg = h('div', { class: 'seg' }, ...[['m', `남성 ${HAIR_STYLES.filter((x) => x.g === 'm').length}`], ['f', `여성 ${HAIR_STYLES.filter((x) => x.g === 'f').length}`], ['x', `템플릿 ${HAIR_STYLES.filter((x) => x.g === 'x').length}`]].map(([g, l]) => h('button', { type: 'button', class: `seg-b ${gtab === g ? 'on' : ''}`, onclick: () => { gtab = g; Audio.sfx('click'); paintPanel(); } }, l)));
     const grid = h('div', { class: 'grid hs-grid' }, ...HAIR_STYLES.filter((s) => s.g === gtab).map((s) => h('button', { type: 'button', class: `card hs ${cur === s.id ? 'on' : ''}`, 'aria-pressed': String(cur === s.id), onclick: () => { sim.setHair(id, s.id, u.look.hair); Audio.sfx('select'); changed(); } }, preview(u, { hairStyle: s.id, dir: 'down', weapon: null }, 16, 12, 6), h('small', {}, s.name))));
     const color = h('input', { type: 'color', value: u.look.hair, 'aria-label': '머리색 직접 선택', oninput: (e) => { sim.setHair(id, u.look.hairStyle, e.target.value); scheduleSave(); paintStage(); } });
     color.addEventListener('change', () => paintPanel());

@@ -65,12 +65,13 @@ function bodyPalette(L, accent) {
   };
 }
 function drawBody(D, frameData, L, accent) {
-  const pal = bodyPalette(L, accent), { rows, ox } = frameData;
+  const pal = bodyPalette(L, accent), { rows, ox, oy } = frameData;
   rows.forEach((row, y) => {
     let x = 0; while (x < row.length) {
       const ch = row[x]; if (ch === '.') { x++; continue; }
       let e = x; while (e + 1 < row.length && row[e + 1] === ch) e++;
-      D(ch === 'C' && y >= 30 ? pal.c : pal[ch] || '#ff00ff', ox + x, 4 + y, e - x + 1, 1); x = e + 1;
+      const legs = y >= 30, col = legs ? (ch === 'C' ? pal.c : ch === 'I' || ch === 'K' ? '#aaaaaa' : ch === 'G' ? '#555555' : ch === 'H' ? '#2a2a2a' : pal[ch]) : pal[ch];   // 다리 구역의 회색은 다리감개(템플릿 고정색)
+      D(col || '#ff00ff', ox + x, oy + y, e - x + 1, 1); x = e + 1;
     }
   });
 }
@@ -85,7 +86,7 @@ function drawInner(c, wc, dir, frame, L, accent, weapon, wings, rec) {
   const fd = bodyFrame(view === 'side' ? 'right' : view, frame);
   drawBody(D, fd, L, accent);
   if (wings && view === 'up') drawWings(r, 'up', frame);
-  drawHair(r, view, L.hairStyle, L.hair, L.hair2);
+  drawHair(r, view, L.hairStyle, L.hair, L.hair2, { x0: fd.ox + fd.head.x0, x1: fd.ox + fd.head.x1, top: fd.oy + fd.head.y0 });
   headGear(D, view, L, accent, fd);
   drawWeapon(rw, view, weapon);
   if (isGun) gunHand(rw, view, L, adj(L.skin, -38), weapon);
@@ -94,7 +95,7 @@ function drawInner(c, wc, dir, frame, L, accent, weapon, wings, rec) {
 
 // 안경 · 마스크 · 모자: 템플릿 머리 상자(앞/뒤 x 10..22, y 5..17)에 맞춘 직접 그림
 function headGear(D, view, L, accent, fd) {
-  const x0 = fd.ox + fd.head.x0, x1 = fd.ox + fd.head.x1, top = 4 + fd.head.y0, w = x1 - x0 + 1, side = view === 'side', back = view === 'up';
+  const x0 = fd.ox + fd.head.x0, x1 = fd.ox + fd.head.x1, top = fd.oy + fd.head.y0, w = x1 - x0 + 1, side = view === 'side', back = view === 'up';
   const c2 = L.coat2, c2L = adj(c2, 22), c2D = adj(c2, -22);
   if (!back && L.extra === 'mask') D('#d9d6cf', x0 + 1, top + 10, w - 2, 3);
   if (!back && L.extra === 'glasses') { const y = top + 7; if (side) { D('#1c1c20', x1 - 6, y, 6, 1); D('#1c1c20', x1 - 6, y + 4, 6, 1); D('#1c1c20', x1 - 6, y, 1, 5); D('#1c1c20', x1 - 1, y, 1, 5); D('rgba(150,200,225,.35)', x1 - 5, y + 1, 4, 3); } else { for (const cx of [x0 + 1, x1 - 5]) { D('#1c1c20', cx, y, 5, 1); D('#1c1c20', cx, y + 4, 5, 1); D('#1c1c20', cx, y, 1, 5); D('#1c1c20', cx + 4, y, 1, 5); D('rgba(150,200,225,.35)', cx + 1, y + 1, 3, 3); } D('#1c1c20', x0 + 6, y + 1, w - 12 > 0 ? w - 12 : 1, 1); } }

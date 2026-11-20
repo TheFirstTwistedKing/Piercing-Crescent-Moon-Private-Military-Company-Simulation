@@ -528,11 +528,11 @@ await t('긴급 습격 정산: 승리=전리품·평판·사기, 패배=약탈·
   const d = new Sim(null, () => 0.5); d.raid.today = 2; d.nextDay(d.buildReport()); assert.equal(d.raid.today, 0);
 });
 await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
-  assert.equal(HAIR_STYLES.length, 48); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 48); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 48, '이름 고유');
+  assert.equal(HAIR_STYLES.length, 78, '기본 48 + 헤어 템플릿 30'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 78); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 78, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 30, '템플릿 30종은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 24);
   const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 28); assert.equal(ext.filter((s) => s.g === 'm').length, 14); assert.equal(ext.filter((s) => s.g === 'f').length, 14);
   const cells = (id, view) => { const c = new Set(); drawHair((col, x, y, w, h) => { assert.ok(/^#[0-9a-f]{6}$/.test(col), id + ' 색 형식'); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) c.add(`${x + i},${y + j}`); }, view, id, '#808080'); return c; };
   const views = ['down', 'up', 'side'], diff = (a, b) => { let d = 0; for (const v of views) { const A = cells(a, v), B = cells(b, v); for (const c of A) if (!B.has(c)) d++; for (const c of B) if (!A.has(c)) d++; } return d; };
-  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 48, '48개 윤곽 모두 다름');
+  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 78, '78개 윤곽 모두 다름');
   for (const s of HAIR_STYLES) for (const v of views) { const m = cells(s.id, v); assert.ok(m.size > 0, s.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x <= 15.5 && y >= 0 && y <= 23.5, `${s.name} ${v} 범위 밖 ${c}`); } }
   for (const a of ext) for (const b of HAIR_STYLES) { if (a === b || a.g !== b.g) continue; assert.ok(diff(a.id, b.id) >= 12, `${a.name} / ${b.name} 윤곽 차이 ${diff(a.id, b.id)}px`); }
   // 색: 14 + 9, 모두 올바른 hex 이고 중복 없음, 모든 스타일이 모든 색으로 그려진다
@@ -661,6 +661,7 @@ await t('머리카락 위치: 템플릿 머리 위에 붙어 있다(정수리를
   const mask = (id, view) => { const m = new Set(); drawHair((c, x, y, w, h) => { for (let j = 0; j < Math.round(h * 2); j++) for (let i = 0; i < Math.round(w * 2); i++) m.add(`${Math.round(x * 2) + i},${Math.round(y * 2) + j}`); }, view, id, '#808080'); return m; };
   const short = new Set(['m9', 'm17', 'm21', 'm6']);
   for (const s of HAIR_STYLES) {
+    if (s.g === 'x') { for (const v of ['down', 'side', 'up']) assert.ok(mask(s.id, v).size > 10, `${s.name} ${v} 도안`); continue; }   // 템플릿 시트 도안은 시트 그대로(앞은 얼굴이 열린 아치형)
     if (short.has(s.id)) continue;
     for (const v of ['down', 'up', 'side']) { const m = mask(s.id, v); for (const [x, y] of (v === 'side' ? [[14, 6], [16, 6], [18, 6]] : [[13, 6], [16, 6], [19, 6]])) assert.ok(m.has(`${x},${y}`), `${s.name} ${v} 정수리 (${x},${y}) 비어 있음`); }
     const m = mask(s.id, 'down'); let lo = -1; for (let y = 4; y < 14; y++) if (m.has(`16,${y}`) || m.has(`15,${y}`)) lo = y; assert.ok(lo >= 10 && lo <= 13, `${s.name} 앞머리선 y${lo}`);
