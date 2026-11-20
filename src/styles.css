@@ -362,3 +362,14 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
   .gm > :nth-child(1) { grid-area: 1 / 1; } .gm > :nth-child(2) { grid-area: 2 / 1; } .gm > :nth-child(3) { grid-area: 1 / 2; } .gm > :nth-child(4) { grid-area: 2 / 2; max-height: calc(100dvh - 190px); } .gm > :nth-child(5) { grid-area: 3 / 1 / 4 / 3; }
   .gm-m { padding: var(--s1) var(--s3); }
 }
+
+/* 공방 무기 */
+.wk-seg { margin-bottom: var(--s3); flex-wrap: wrap; }
+.wk-head { display: grid; gap: var(--s1); padding: var(--s3) var(--s4); margin-bottom: var(--s3); border-left: 3px solid var(--wk); background: rgba(190, 215, 255, .04); }
+.wk-head b { font-size: 15px; } .wk-head small { color: var(--ink2); font-size: 12px; line-height: 1.5; } .wk-fund { font: 500 12px/1.5 var(--mono); color: var(--ink3); margin-top: var(--s1); }
+.card.wk { position: relative; border-left: 3px solid var(--wk); text-align: left; }
+.card.wk.poor { opacity: .6; } .wk-mk { margin-left: var(--s2); font: 600 11px/1 var(--mono); font-style: normal; color: var(--wk); }
+.wk-price { display: grid; gap: 2px; margin-top: var(--s2); font: 500 11px/1.4 var(--mono); color: var(--ink2); }
+.wk-on { position: absolute; top: var(--s2); right: var(--s2); font: 600 10px/1 var(--mono); font-style: normal; padding: 3px 6px; background: var(--amber); color: #04060a; }
+.wk-confirm { display: grid; gap: var(--s2); margin-bottom: var(--s4); } .wk-confirm p { margin: 0 !important; } .wk-cost { font: 500 13px/1.5 var(--mono); color: var(--ink2); } .wk-cost.bad { color: var(--red); }
+.wk-seg .seg-b { white-space: nowrap; flex: 0 0 auto; padding-left: var(--s4); padding-right: var(--s4); }

@@ -3,12 +3,13 @@ import * as Audio from '../core/audio.js';
 import { engine } from '../game/engine.js';
 import { DEPTS, DEPT } from '../game/data.js';
 import { HAIR_STYLES, HAIR_COLORS } from '../game/hair.js';
-import { WEAPONS, WEAPON, weaponIcon } from '../game/weapons.js';
+import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, weaponIcon } from '../game/weapons.js';
+import { fmtCredits } from '../game/sim.js';
 import { TRAITS, TRAIT, ABILITIES, ABILITY, RARITY, GACHA_ODDS, MAX_TRAITS, MAX_ABILITIES, fxLines } from '../game/traits.js';
 import { CSTATS, STAT_MAX, sumAlloc } from '../game/rules.js';
 import { drawPreview, OX } from '../game/sprites.js';
 import { ITEM, ITEMS, STAT_ITEM_CAP } from '../game/shop.js';
-import { h, icon } from '../core/ui.js';
+import { h, icon, modal } from '../core/ui.js';
 
 const TABS = [['name', '이름'], ['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['gear', '장비'], ['trait', '특성'], ['ability', '능력']];
 const fxList = (fx) => h('ul', { class: 'fxl' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
@@ -16,7 +17,7 @@ const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(docume
 
 export function mountCustom(root, ctx, arg) {
   const sim = engine.sim;
-  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'name', gtab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
+  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'name', wtab = 'base', gtab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
   const U = () => sim.byId[id];
   const scheduleSave = () => { clearTimeout(saveT); saveT = setTimeout(() => engine.save(), 1500); };
 
@@ -76,10 +77,28 @@ export function mountCustom(root, ctx, arg) {
     return h('div', {}, h('p', { class: 'f-label' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
   };
 
+  const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 16, height: 20, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '48px'; n.style.height = '60px'; return n; };
+  const confirmEquip = (w) => {
+    const u = U(); if (u.weapon === w.id) return; const left = sim.funds - w.fee, prev = WEAPON[u.weapon];
+    modal({ title: `${w.name} 착용`, body: h('div', { class: 'wk-confirm' },
+      h('p', {}, `착용자: ${u.name}`), h('p', {}, `무기: ${w.name} (${WORKSHOPS.find((x) => x.id === w.workshop).short} 공방)`),
+      h('p', { class: 'wk-cost' }, `착용비 ${fmtCredits(w.fee)} — 지금 한 번 지불`), h('p', { class: 'wk-cost' }, `일일 유지비 ${fmtCredits(w.upkeep)} — 착용하는 동안 매일 운영비에 더해짐`),
+      prev?.upkeep ? h('p', { class: 'wk-cost' }, `기존 ${prev.name}의 유지비 ${fmtCredits(prev.upkeep)}는 사라집니다.`) : null,
+      h('p', { class: `wk-cost ${left < 0 ? 'bad' : ''}` }, left < 0 ? `자금이 부족합니다. (보유 ${fmtCredits(sim.funds)})` : `착용 후 자금 ${fmtCredits(left)}`)),
+      actions: [{ label: '취소' }, { label: '착용', kind: 'primary', keep: true, onClick: (close) => { const r = sim.equipWorkshop(id, w.id); if (!r.ok) { Audio.sfx('error'); ctx.toast(r.reason, 'bad'); return; } Audio.sfx('select'); close(); changed(); } }] });
+  };
   const weaponTab = () => {
     const u = U();
-    return h('div', { class: 'grid wp-grid' }, ...WEAPONS.map((w) => h('button', { type: 'button', class: `card wp ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
-      (() => { const c = weaponIcon(w.id); const n = Object.assign(document.createElement('canvas'), { width: 16, height: 20, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '48px'; n.style.height = '60px'; return n; })(), h('b', {}, w.name), h('small', {}, w.desc), fxList(w.fx))));
+    const seg = h('div', { class: 'seg wk-seg', role: 'tablist', 'aria-label': '무기 분류' }, ...[['base', '기본 무기'], ...WORKSHOPS.map((x) => [x.id, x.short + ' 공방'])].map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(wtab === k), class: `seg-b ${wtab === k ? 'on' : ''}`, onclick: () => { wtab = k; Audio.sfx('click'); paintPanel(); } }, l)));
+    if (wtab === 'base') return h('div', {}, seg, h('div', { class: 'grid wp-grid' }, ...WEAPONS.map((w) => h('button', { type: 'button', class: `card wp ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
+      wIcon(w.id), h('b', {}, w.name), h('small', {}, w.desc), fxList(w.fx)))));
+    const wk = WORKSHOPS.find((x) => x.id === wtab), list = WORKSHOP_WEAPONS.filter((w) => w.workshop === wtab);
+    return h('div', {}, seg,
+      h('div', { class: 'wk-head', style: `--wk:${wk.color}` }, h('b', {}, wk.name), h('small', {}, wk.desc), h('p', { class: 'wk-fund' }, `보유 자금 ${fmtCredits(sim.funds)} · 착용할 때 착용비를 내고, 착용하는 동안 매일 유지비가 듭니다.`)),
+      h('div', { class: 'grid wp-grid' }, ...list.map((w) => { const on = u.weapon === w.id, poor = sim.funds < w.fee;
+        return h('button', { type: 'button', class: `card wp wk ${on ? 'on' : ''} ${poor && !on ? 'poor' : ''}`, style: `--wk:${wk.color}`, 'aria-pressed': String(on), onclick: () => { if (on) return; Audio.sfx('click'); confirmEquip(w); } },
+          wIcon(w.id), h('b', {}, w.name), h('small', {}, `${WEAPON[w.base].name} · ${wk.short}`), fxList(w.fx),
+          h('p', { class: 'wk-price' }, h('span', {}, `착용비 ${fmtCredits(w.fee)}`), h('span', {}, `유지비 ${fmtCredits(w.upkeep)}/일`)), on ? h('i', { class: 'wk-on' }, '착용 중') : null); })));
   };
 
   const statsTab = () => {
