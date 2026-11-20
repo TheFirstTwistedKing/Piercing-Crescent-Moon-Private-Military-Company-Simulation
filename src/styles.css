@@ -368,7 +368,7 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
 .wk-head { display: grid; gap: var(--s1); padding: var(--s3) var(--s4); margin-bottom: var(--s3); border-left: 3px solid var(--wk); background: rgba(190, 215, 255, .04); }
 .wk-head b { font-size: 15px; } .wk-head small { color: var(--ink2); font-size: 12px; line-height: 1.5; } .wk-fund { font: 500 12px/1.5 var(--mono); color: var(--ink3); margin-top: var(--s1); }
 .card.wk { position: relative; border-left: 3px solid var(--wk); text-align: left; }
-.card.wk.poor { opacity: .6; } .wk-mk { margin-left: var(--s2); font: 600 11px/1 var(--mono); font-style: normal; color: var(--wk); }
+.card.wk.poor { } .wk-mk { margin-left: var(--s2); font: 600 11px/1 var(--mono); font-style: normal; color: var(--wk); }
 .wk-price { display: grid; gap: 2px; margin-top: var(--s2); font: 500 11px/1.4 var(--mono); color: var(--ink2); }
 .wk-on { position: absolute; top: var(--s2); right: var(--s2); font: 600 10px/1 var(--mono); font-style: normal; padding: 3px 6px; background: var(--amber); color: #04060a; }
 .wk-confirm { display: grid; gap: var(--s2); margin-bottom: var(--s4); } .wk-confirm p { margin: 0 !important; } .wk-cost { font: 500 13px/1.5 var(--mono); color: var(--ink2); } .wk-cost.bad { color: var(--red); }
@@ -414,3 +414,16 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
 @media (max-width: 480px) { .rc-cards { grid-template-columns: 1fr; } .rc-head h2 small { display: block; margin: 2px 0 0; } }
 
 .gun-line { color: var(--amber); font: 500 11px/1.4 var(--mono); margin-top: var(--s1); }
+
+/* ── 무기 도감 ── 방향: 검은 터미널 + 호박색 신호 하나, 공방마다 단일 인장색. 가장 큰 요소는 '현재 장착' 판(큰 도트), 나머지는 조용한 목록. */
+.wk-plate { display: grid; grid-template-columns: 132px 1fr; gap: var(--s5); align-items: center; margin-bottom: var(--s5); padding: var(--s4) var(--s5); border-left: 3px solid var(--wk); background: rgba(190, 215, 255, .035); }
+.wk-ico { display: grid; place-items: center; } .wk-ico canvas { image-rendering: pixelated; }
+.wk-plate-art { display: grid; place-items: center; min-height: 150px; background: #070b11; box-shadow: inset 0 0 0 1px var(--line); } .wk-plate-art canvas { image-rendering: pixelated; }
+.wk-plate-info { display: grid; gap: var(--s2); min-width: 0; align-content: center; } .wk-plate-info h3 { font: 700 26px/1.15 var(--ui); } .wk-plate-sub { color: var(--ink2); font-size: 13px; }
+.fx-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; } .fx-chips li { font: 500 11px/1 var(--mono); padding: 4px 6px; box-shadow: inset 0 0 0 1px var(--line); } .fx-chips .good { color: var(--green); } .fx-chips .bad { color: var(--red); }
+.wk-sec { margin-top: var(--s6); } .wk-sec-h { display: flex; align-items: baseline; gap: var(--s3); padding-bottom: var(--s2); margin-bottom: var(--s3); border-bottom: 1px solid var(--line); font: 600 13px/1.2 var(--ui); letter-spacing: .04em; color: var(--ink); } .wk-sec-h small { font: 500 11px var(--mono); color: var(--ink3); }
+.card.wpc { display: grid; grid-template-columns: 56px 1fr; column-gap: var(--s3); row-gap: var(--s1); align-content: start; align-items: start; }
+.card.wpc > .wk-ico { grid-row: 1 / span 3; display: grid; place-items: center; } .card.wpc > :not(.wk-ico) { grid-column: 2; } .card.wpc > .wk-price, .card.wpc > .wk-on { grid-column: 1 / -1; }
+.card.wpc .fx-chips { margin-top: var(--s1); } .wp-grid:has(.wpc) { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.wk-price .short { color: var(--red); }
+@media (max-width: 560px) { .wk-plate { grid-template-columns: 96px 1fr; gap: var(--s3); padding: var(--s3); } .wk-plate-art { min-height: 110px; } .wk-plate-info h3 { font-size: 20px; } .wp-grid:has(.wpc) { grid-template-columns: 1fr; } }

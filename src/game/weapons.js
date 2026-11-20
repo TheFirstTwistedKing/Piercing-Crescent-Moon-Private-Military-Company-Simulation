@@ -47,7 +47,7 @@ export function drawWeapon(r, view, id0) {
   const id = w.id;
   if (id === 'shield') {
     const [x, y] = view === 'down' ? [0, 11] : view === 'up' ? [5, 10] : [9, 11], wd = view === 'up' ? 6 : 5;
-    r('#241c14', x, y, wd, 7); r('#4a6a8c', x + 1, y + 1, wd - 2, 5); r(G, x + Math.floor(wd / 2), y + 2, 1, 3); r('#8fb0d0', x + 1, y + 1, wd - 2, 1);
+    r('#6a5640', x, y, wd, 7); r('#5f86ae', x + 1, y + 1, wd - 2, 5); r(G, x + Math.floor(wd / 2), y + 2, 1, 3); r('#b8d4ee', x + 1, y + 1, wd - 2, 1);
     return;
   }
   if (id === 'gauntlet') {
@@ -72,19 +72,24 @@ function drawArt(r, view, w) {
   for (const [dx, dy, wd, ht, role] of a.rects) r(c(role), cx + dx, hy + dy, wd, ht);
 }
 
-const iconCache = new Map();
-export function weaponIcon(id0) {
-  if (iconCache.has(id0)) return iconCache.get(id0);
-  const cv = Object.assign(document.createElement('canvas'), { width: 16, height: 20 }); const c = cv.getContext('2d');
-  const w = WEAPON[id0], id = w.id, fill = (col, x, y, wd, ht) => { c.fillStyle = col; c.fillRect(x, y, wd, ht); };
+/** 아이콘(16×20)에 그릴 사각형 목록 [색, x, y, w, h] — 순수 함수라 테스트에서 잘림·색 누락을 검사할 수 있다. */
+export function iconRects(id0) {
+  const w = WEAPON[id0], id = w.id, out = [], fill = (col, x, y, wd, ht) => out.push([col, x, y, wd, ht]);
   if (w.art) {
     const col = (role) => w.pal[role] || '#ff00ff', a = w.art;
     if (a.kind === 'shield') { const ox = Math.floor((16 - a.w * 2) / 2), oy = Math.floor((20 - a.h * 2) / 2); for (const [px, py, role] of a.px) fill(col(role), ox + px * 2, oy + py * 2, 2, 2); }
     else if (a.kind === 'gauntlet') { const ox = Math.floor((16 - a.w * 3) / 2), oy = Math.floor((20 - a.h * 3) / 2); for (const [px, py, role] of a.px) fill(col(role), ox + px * 3, oy + py * 3, 3, 3); }
     else if (a.kind === 'gun') { const xs = a.px.map((q) => q[0]), ys = a.px.map((q) => q[1]), ox = Math.floor((16 - (Math.max(...xs) - Math.min(...xs) + 1)) / 2) - Math.min(...xs), oy = Math.floor((20 - (Math.max(...ys) - Math.min(...ys) + 1)) / 2) - Math.min(...ys); for (const [gx, gy, role] of a.px) fill(col(role), ox + gx, oy + gy, 1, 1); }
     else for (const [dx, dy, wd, ht, role] of a.rects) fill(col(role), 8 + dx, 16 + dy, wd, ht);
-  } else if (id === 'shield') { fill('#241c14', 3, 3, 10, 13); fill('#4a6a8c', 4, 4, 8, 11); fill(G, 7, 6, 2, 7); fill('#8fb0d0', 4, 4, 8, 1); }
+  } else if (id === 'shield') { fill('#6a5640', 3, 3, 10, 13); fill('#5f86ae', 4, 4, 8, 11); fill(G, 7, 6, 2, 7); fill('#b8d4ee', 4, 4, 8, 1); }
   else if (id === 'gauntlet') { fill(D, 4, 6, 8, 9); fill(S, 4, 6, 8, 2); fill(H, 4, 6, 2, 2); fill('#4a525a', 4, 12, 8, 3); fill(D, 3, 14, 10, 2); }
-  else for (const [dx, dy, wd, ht, col] of w.parts) fill(col, 8 + dx, 17 + dy, wd, ht);
+  else for (const [dx, dy, wd, ht, col] of w.parts) fill(col, 8 + dx, 16 + dy, wd, ht);
+  return out;
+}
+const iconCache = new Map();
+export function weaponIcon(id0) {
+  if (iconCache.has(id0)) return iconCache.get(id0);
+  const cv = Object.assign(document.createElement('canvas'), { width: 16, height: 20 }); const c = cv.getContext('2d');
+  for (const [col, x, y, wd, ht] of iconRects(id0)) { c.fillStyle = col; c.fillRect(x, y, wd, ht); }
   iconCache.set(id0, cv); return cv;
 }

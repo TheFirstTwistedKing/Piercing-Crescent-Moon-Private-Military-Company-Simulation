@@ -70,7 +70,7 @@ const CATALOG = [
   ['hammer', 'arc', '전격 망치', 4, HD(-9, 3, 'KKKKKKK/KHBEBDK/KDDDDDK')],
   ['hammer', 'wad', '전술 해머', 2, HD(-9, 2, 'K..KKK/KKBBBK/.KBHBK/..BDBK')],
   ['hammer', 'wad', '합금 메이스', 5, HD(-9, 2, '.K.K./KBHBK/TBEBT/KBDBK/.K.K.')],
-  ['hammer', 'magma', '화산 망치', 3, HD(-9, 1, '.K./KKK/KBK/KEK/KBK/KDK')],
+  ['hammer', 'magma', '화산 망치', 3, HD(-9, 1, '.H./HKH/KBK/KEK/KBK/KDK')],
 
   ['greathammer', 'magma', '마그마 대형 망치', 2, HD(-14, 3, '.KKKKK./KBEBEBK/KBBEBBK/KDDDDDK')],
   ['greathammer', 'magma', '화산 파쇄 망치', 5, HD(-14, 3, 'K.KKK.K/KBBEBBK/KBEBEBK/KDBBBDK/.KKKKK.')],
@@ -81,7 +81,7 @@ const CATALOG = [
   ['handaxe', 'wad', '경량 손도끼', 1, HD(-8, 0, 'KBB./WHBD/WBBD/KDD.')],
   ['handaxe', 'wad', '합금 토마호크', 3, HD(-8, 1, '.KB./KWBB/.WHB/.WBD/.WDB/.K..')],
   ['handaxe', 'magma', '용암 손도끼', 4, HD(-8, 0, 'KBEB./WBBBB/WHBD./K.DD./..D..')],
-  ['handaxe', 'magma', '분화 핸드액스', 2, HD(-8, 2, '.BKB./BBWBB/.DKD.')],
+  ['handaxe', 'magma', '분화 핸드액스', 2, HD(-8, 2, '.HKH./BEWEB/.DKD.')],
   ['handaxe', 'arc', '스파크 핸드액스', 5, HD(-8, 0, 'KEEE/WBD./W...')],
 
   ['battleaxe', 'arc', '전광 배틀엑스', 3, HD(-13, 3, '.B.F.B./BHBFBDB/BBEWEBB/.BBWBB./..DWD..')],
@@ -113,7 +113,7 @@ const CATALOG = [
   ['sniper', 'magma', '흑요석 장거리포', 5, GUN({ stock: 'bulk', sl: 3, body: 5, bh: 3, bar: 5, bt: 2, mz: 'brake', gp: 2, top: 'bigscope', bipod: 1, glow: 'core' })],
   ['sniper', 'arc', '뇌광 저격총', 3, GUN({ stock: 'skel', sl: 4, body: 4, bh: 2, bar: 6, bt: 1, mz: 'flash', gp: 2, mag: 'curve', mp: 2, top: 'bigscope', glow: 'cells' })],
   ['sniper', 'arc', '플라즈마 레일건', 4, GUN({ stock: 'none', body: 5, bh: 3, bar: 6, bt: 2, gp: 2, glow: 'line', top: 'rail', fins: 1 })],
-  ['sniper', 'wad', '정밀 저격총', 1, GUN({ stock: 'full', sl: 4, body: 3, bh: 2, bar: 7, bt: 1, mz: 'supp', gp: 2, mag: 'long', mp: 1, top: 'scope' })],
+  ['sniper', 'wad', '정밀 저격총', 1, GUN({ stock: 'full', sl: 4, body: 3, bh: 2, bar: 6, bt: 1, mz: 'supp', gp: 2, mag: 'long', mp: 1, top: 'scope' })],
 
   ['rocket', 'wad', '개량형 로켓포', 1, GUN({ tube: { len: 10, th: 3, flare: 'rear', head: 'none', pad: 1, sight: 1, grip: 2 } })],
   ['rocket', 'wad', '합금 대전차포', 4, GUN({ tube: { len: 12, th: 4, flare: 'both', head: 'rocket', pad: 0, sight: 1, grip: 2 } })],

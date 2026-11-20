@@ -3,7 +3,7 @@ import * as Audio from '../core/audio.js';
 import { engine } from '../game/engine.js';
 import { DEPTS, DEPT } from '../game/data.js';
 import { HAIR_STYLES, HAIR_COLORS } from '../game/hair.js';
-import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, weaponIcon } from '../game/weapons.js';
+import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, weaponIcon, iconRects } from '../game/weapons.js';
 import { fmtCredits } from '../game/sim.js';
 import { TRAITS, TRAIT, ABILITIES, ABILITY, RARITY, GACHA_ODDS, MAX_TRAITS, MAX_ABILITIES, fxLines } from '../game/traits.js';
 import { CSTATS, STAT_MAX, sumAlloc } from '../game/rules.js';
@@ -88,18 +88,42 @@ export function mountCustom(root, ctx, arg) {
       h('p', { class: `wk-cost ${left < 0 ? 'bad' : ''}` }, left < 0 ? `자금이 부족합니다. (보유 ${fmtCredits(sim.funds)})` : `착용 후 자금 ${fmtCredits(left)}`)),
       actions: [{ label: '취소' }, { label: '착용', kind: 'primary', keep: true, onClick: (close) => { const r = sim.equipWorkshop(id, w.id); if (!r.ok) { Audio.sfx('error'); ctx.toast(r.reason, 'bad'); return; } Audio.sfx('select'); close(); changed(); } }] });
   };
+  const typeOf = (w) => WEAPON[w.base || w.id];
+  const chips = (fx) => h('ul', { class: 'fx-chips' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
+  const gunLine = (w) => w.gun ? h('small', { class: 'gun-line' }, `습격 전투: 사거리 ${w.gun.range} · 공격 간격 ${w.gun.cd}초${w.gun.splash ? ` · 범위 피해 ${w.gun.splash}` : ''}`) : null;
+  /** 무기 영역만 잘라서 칸(boxW×boxH)에 정수 배율로 꽉 차게 그린다 — 작은 무기도 크게, 긴 무기도 잘림 없이 */
+  const fitIcon = (wid, boxW, boxH, maxScale = 12) => {
+    const rs = iconRects(wid), x0 = Math.min(...rs.map((r) => r[1])), y0 = Math.min(...rs.map((r) => r[2])), x1 = Math.max(...rs.map((r) => r[1] + r[3])), y1 = Math.max(...rs.map((r) => r[2] + r[4])), w = x1 - x0, hh = y1 - y0;
+    const sc = Math.max(1, Math.min(Math.floor(boxW / w), Math.floor(boxH / hh), maxScale)), n = Object.assign(document.createElement('canvas'), { width: w * sc, height: hh * sc, className: 'px', 'aria-hidden': 'true' }), g = n.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(weaponIcon(wid), x0, y0, w, hh, 0, 0, w * sc, hh * sc); n.style.width = `${w * sc}px`; n.style.height = `${hh * sc}px`; return h('div', { class: 'wk-ico', style: `width:${boxW}px;height:${boxH}px` }, n);
+  };
+  /** 현재 장착 판: 화면에서 가장 크게 보이는 요소(큰 도트 + 이름 + 성능) */
+  const plate = (u) => {
+    const cur = WEAPON[u.weapon], wk = cur.workshop ? WORKSHOPS.find((x) => x.id === cur.workshop) : null;
+    return h('section', { class: 'wk-plate', style: `--wk:${wk ? wk.color : 'var(--amber)'}`, 'aria-label': '현재 장착한 무기' },
+      h('div', { class: 'wk-plate-art' }, matchMedia('(max-width: 560px)').matches ? fitIcon(cur.id, 72, 96) : fitIcon(cur.id, 116, 136)),
+      h('div', { class: 'wk-plate-info' }, h('p', { class: 'eyebrow' }, `${u.name} · 현재 장착`), h('h3', {}, cur.name), h('p', { class: 'wk-plate-sub' }, `${typeOf(cur).name} · ${wk ? wk.name : '기본 무기'}`), chips(cur.fx), gunLine(cur),
+        cur.workshop ? h('p', { class: 'wk-price' }, h('span', {}, `일일 유지비 ${fmtCredits(cur.upkeep)}`), cur.fx.upkeep ? h('span', {}, `탄약비 ${fmtCredits(cur.fx.upkeep)}`) : null) : null));
+  };
+  const section = (label, count, grid) => h('section', { class: 'wk-sec' }, h('h4', { class: 'wk-sec-h' }, label, h('small', {}, `${count}`)), grid);
   const weaponTab = () => {
     const u = U();
     const seg = h('div', { class: 'seg wk-seg', role: 'tablist', 'aria-label': '무기 분류' }, ...[['base', '기본 무기'], ...WORKSHOPS.map((x) => [x.id, x.short + ' 공방'])].map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(wtab === k), class: `seg-b ${wtab === k ? 'on' : ''}`, onclick: () => { wtab = k; Audio.sfx('click'); paintPanel(); } }, l)));
-    if (wtab === 'base') return h('div', {}, seg, h('div', { class: 'grid wp-grid' }, ...WEAPONS.map((w) => h('button', { type: 'button', class: `card wp ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
-      wIcon(w.id), h('b', {}, w.name), h('small', {}, w.desc), fxList(w.fx), w.gun ? h('small', { class: 'gun-line' }, `습격 전투: 사거리 ${w.gun.range} · 공격 간격 ${w.gun.cd}초${w.gun.splash ? ` · 범위 피해 ${w.gun.splash}` : ''}`) : null))));
+    if (wtab === 'base') {
+      const card = (w) => h('button', { type: 'button', class: `card wp wpc ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
+        fitIcon(w.id, 56, 70, 5), h('b', {}, w.name), h('small', {}, w.desc), chips(w.fx), gunLine(w));
+      const melee = WEAPONS.filter((w) => !w.gun), guns = WEAPONS.filter((w) => w.gun);
+      return h('div', {}, seg, plate(u), section('근접 무기', melee.length, h('div', { class: 'grid wp-grid' }, ...melee.map(card))), section('총기 · 탄약비가 든다', guns.length, h('div', { class: 'grid wp-grid' }, ...guns.map(card))));
+    }
     const wk = WORKSHOPS.find((x) => x.id === wtab), list = WORKSHOP_WEAPONS.filter((w) => w.workshop === wtab);
-    return h('div', {}, seg,
+    const card = (w) => { const on = u.weapon === w.id, poor = sim.funds < w.fee;
+      return h('button', { type: 'button', class: `card wp wpc wk ${on ? 'on' : ''} ${poor && !on ? 'poor' : ''}`, style: `--wk:${wk.color}`, 'aria-pressed': String(on), onclick: () => { if (on) return; Audio.sfx('click'); confirmEquip(w); } },
+        fitIcon(w.id, 56, 70, 5), h('b', {}, w.name), h('small', {}, `${typeOf(w).name} · ${wk.short}`), chips(w.fx), gunLine(w),
+        h('p', { class: 'wk-price' }, h('span', { class: poor && !on ? 'short' : '' }, `착용비 ${fmtCredits(w.fee)}`), h('span', {}, `유지비 ${fmtCredits(w.upkeep)}/일`)), on ? h('i', { class: 'wk-on' }, '착용 중') : null); };
+    const order = WEAPONS.map((x) => x.id).filter((bid) => list.some((w) => w.base === bid));
+    return h('div', {}, seg, plate(u),
       h('div', { class: 'wk-head', style: `--wk:${wk.color}` }, h('b', {}, wk.name), h('small', {}, wk.desc), h('p', { class: 'wk-fund' }, `보유 자금 ${fmtCredits(sim.funds)} · 착용할 때 착용비를 내고, 착용하는 동안 매일 유지비가 듭니다.`)),
-      h('div', { class: 'grid wp-grid' }, ...list.map((w) => { const on = u.weapon === w.id, poor = sim.funds < w.fee;
-        return h('button', { type: 'button', class: `card wp wk ${on ? 'on' : ''} ${poor && !on ? 'poor' : ''}`, style: `--wk:${wk.color}`, 'aria-pressed': String(on), onclick: () => { if (on) return; Audio.sfx('click'); confirmEquip(w); } },
-          wIcon(w.id), h('b', {}, w.name), h('small', {}, `${WEAPON[w.base].name} · ${wk.short}`), fxList(w.fx), w.gun ? h('small', { class: 'gun-line' }, `습격 전투: 사거리 ${w.gun.range} · 공격 간격 ${w.gun.cd}초${w.gun.splash ? ` · 범위 피해 ${w.gun.splash}` : ''}`) : null,
-          h('p', { class: 'wk-price' }, h('span', {}, `착용비 ${fmtCredits(w.fee)}`), h('span', {}, `유지비 ${fmtCredits(w.upkeep)}/일`)), on ? h('i', { class: 'wk-on' }, '착용 중') : null); })));
+      ...order.map((bid) => { const items = list.filter((w) => w.base === bid); return section(WEAPON[bid].name, items.length, h('div', { class: 'grid wp-grid' }, ...items.map(card))); }));
   };
 
   const statsTab = () => {
