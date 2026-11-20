@@ -307,6 +307,11 @@ export class Sim {
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, reason: '색 형식 오류' };
     u.look.hairStyle = style; u.look.hair = color.toLowerCase(); this.dirty = true; this.emit('custom'); return { ok: true };
   }
+  /** 머리 끝색(그라데이션). null 이면 단색. */
+  setHairTip(id, tip) {
+    const u = this.byId[id]; if (tip !== null && !/^#[0-9a-fA-F]{6}$/.test(tip)) return { ok: false, reason: '색 형식 오류' };
+    u.look.hair2 = tip ? tip.toLowerCase() : null; this.dirty = true; this.emit('custom'); return { ok: true };
+  }
   /** 이름(1~12자)과 라틴어 이름(영문 2~14자) 변경. 다른 캐릭터와 같은 이름은 불가. */
   nameProblem(id, name, latin) {
     if (name.length < 1 || name.length > 12 || /[<>\u0000-\u001f]/.test(name)) return '이름은 1~12자로 입력하세요. (< > 제외)';
@@ -392,6 +397,21 @@ export class Sim {
     u.home = room; u.mode = 'goto'; u.path = path; u.wait = 2;
     if (!auto) { this.dayLog.orders++; this.note(`${u.name} → ${ROOM_LABEL[room]} 이동 명령`, 'order', false); }
     return { ok: true };
+  }
+
+  /** 부서 재집결: 그 부서 인원 전원을 부서 방으로 불러 모은다. 임무 중인 인원과 부상자(의무실 이동)는 제외한다. */
+  regroup(dept) {
+    const d = DEPT[dept]; if (!d) return { ok: false, reason: '알 수 없는 부서' };
+    if (this.ended) return { ok: false, reason: '하루가 종료되었습니다. 보고서를 제출하세요.' };
+    const moved = [], skipped = [];
+    for (const u of this.units.filter((x) => x.dept === dept)) {
+      if (u.mode === 'mission') { skipped.push({ name: u.name, why: '임무 중' }); continue; }
+      if (this.isInjured(u)) { skipped.push({ name: u.name, why: '부상(의무실)' }); continue; }
+      const r = this.sendToRoom(u.id, d.room, true);
+      if (r.ok) moved.push(u.name); else skipped.push({ name: u.name, why: r.reason });
+    }
+    if (moved.length) { this.dayLog.orders++; this.note(`${d.en} 재집결 — ${moved.length}명 ${d.roomKo}(으)로 복귀`, 'order', false); }
+    return { ok: moved.length > 0, moved, skipped, reason: moved.length ? '' : '집결시킬 수 있는 인원이 없습니다.' };
   }
 
   sendMission(id, missionId) {
@@ -612,7 +632,7 @@ export class Sim {
   /* ── 저장/복원 ── */
   serialize() {
     const units = {};
-    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
+    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
     return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
@@ -637,7 +657,7 @@ export class Sim {
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
       if (st.c) {
         const c = st.c; if (typeof c.nm === 'string' && typeof c.ln === 'string' && !this.nameProblem(u.id, c.nm.trim(), c.ln.trim())) { u.name = c.nm.trim(); u.latin = c.ln.trim(); }
-        if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if (WEAPON[c.w]) u.weapon = c.w;
+        if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if ('h2' in c) u.look.hair2 = /^#[0-9a-f]{6}$/i.test(c.h2 || '') ? c.h2.toLowerCase() : null; if (WEAPON[c.w]) u.weapon = c.w;
         if (Number.isInteger(c.pool) && c.pool >= 40 && c.pool <= 50) u.pool = c.pool;
         u.traits = (c.traits || []).filter((t, i, a) => TRAIT[t] && a.indexOf(t) === i); u.used = Math.max(c.used || 0, u.traits.length);
         u.eq = (c.eq || []).filter((t) => u.traits.includes(t)).slice(0, MAX_TRAITS); u.ab = (c.ab || []).filter((a) => this.research.abilities.includes(a)).slice(0, MAX_ABILITIES);

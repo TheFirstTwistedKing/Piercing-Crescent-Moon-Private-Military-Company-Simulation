@@ -1,4 +1,4 @@
-// 게임 데이터: 8개 부서, 24명 인원(재디자인 캐릭터), 임무, 순찰 경로, 혼잣말 대사.
+// 게임 데이터: 8개 부서, 25명 인원(재디자인 캐릭터), 임무, 순찰 경로, 혼잣말 대사.
 export const DEPTS = [
   { id: 1, key: 'operation', no: '제 1 부서', en: 'Operation', ko: '중요업무처리팀', color: '#d8b45a', room: 'operation', roomKo: '중앙 지휘실' },
   { id: 2, key: 'rager', no: '제 2 부서', en: 'Rager', ko: '공격팀', color: '#c4553f', room: 'rager', roomKo: '전투 훈련장' },
@@ -18,6 +18,7 @@ export const ROOM_LABEL = { ...Object.fromEntries(DEPTS.map((d) => [d.room, d.ro
 const S = (cmb, def, mob, med, int) => ({ cmb, def, mob, med, int });
 // look: skin, hair, coat, coat2(그림자/안감), pants, hat(none|cap|beret|helm|hood|headset|goggles), extra(none|scarf|mask|vest|glasses)
 export const ROSTER = [
+  { id: 'c25', name: '유승호', role: '중요업무 팀장', dept: 'operation', stats: S(62, 58, 54, 34, 95), look: { skin: '#e0b490', hair: '#17121a', hair2: '#c0261c', coat: '#2d2a33', coat2: '#1c1a22', pants: '#17161a', hat: 'none', extra: 'none' } },
   { id: 'c01', name: '한서윤', role: '총괄 지휘관', dept: 'operation', stats: S(48, 52, 50, 40, 90), look: { skin: '#e3b894', hair: '#1c1a1f', coat: '#3a2f27', coat2: '#251e19', pants: '#1d1b1c', hat: 'cap', extra: 'none' } },
   { id: 'c02', name: '라이언 코발', role: '작전 분석관', dept: 'operation', stats: S(44, 46, 48, 38, 82), look: { skin: '#d8a982', hair: '#6b4a2b', coat: '#4a4339', coat2: '#2e2a24', pants: '#201e1d', hat: 'headset', extra: 'glasses' } },
   { id: 'c03', name: '백도현', role: '기밀 관리관', dept: 'operation', stats: S(40, 55, 46, 35, 86), look: { skin: '#e8c4a2', hair: '#111', coat: '#2f3238', coat2: '#1d1f24', pants: '#191a1c', hat: 'none', extra: 'mask' } },
@@ -46,8 +47,8 @@ export const ROSTER = [
 
 // 성별 · 기본 머리 스타일 · 기본 무기 (커스터마이징으로 변경 가능)
 const FEMALE = new Set(['c01', 'c05', 'c08', 'c10', 'c12', 'c13', 'c17', 'c19', 'c21', 'c23']);
-const HAIR0 = { c01: 'f1', c02: 'm3', c03: 'm1', c04: 'm2', c05: 'f3', c06: 'm9', c07: 'm4', c08: 'f2', c09: 'm1', c10: 'f7', c11: 'm8', c12: 'f9', c13: 'f5', c14: 'm3', c15: 'm5', c16: 'm7', c17: 'f4', c18: 'm2', c19: 'f6', c20: 'm6', c21: 'f10', c22: 'm4', c23: 'f8', c24: 'm10' };
-const WEAPON0 = { c01: 'rapier', c02: 'dagger', c03: 'shortsword', c04: 'battleaxe', c05: 'hammer', c06: 'gauntlet', c07: 'shield', c08: 'longsword', c09: 'spear', c10: 'shortsword', c11: 'dagger', c12: 'shortsword', c13: 'dagger', c14: 'dagger', c15: 'shortsword', c16: 'dagger', c17: 'rapier', c18: 'handaxe', c19: 'spear', c20: 'spear', c21: 'rapier', c22: 'hammer', c23: 'handaxe', c24: 'greathammer' };
+const HAIR0 = { c01: 'f1', c02: 'm3', c03: 'm1', c04: 'm2', c05: 'f3', c06: 'm9', c07: 'm4', c08: 'f2', c09: 'm1', c10: 'f7', c11: 'm8', c12: 'f9', c13: 'f5', c14: 'm3', c15: 'm5', c16: 'm7', c17: 'f4', c18: 'm2', c19: 'f6', c20: 'm6', c21: 'f10', c22: 'm4', c23: 'f8', c24: 'm10', c25: 'm3' };
+const WEAPON0 = { c01: 'rapier', c02: 'dagger', c03: 'shortsword', c04: 'battleaxe', c05: 'hammer', c06: 'gauntlet', c07: 'shield', c08: 'longsword', c09: 'spear', c10: 'shortsword', c11: 'dagger', c12: 'shortsword', c13: 'dagger', c14: 'dagger', c15: 'shortsword', c16: 'dagger', c17: 'rapier', c18: 'handaxe', c19: 'spear', c20: 'spear', c21: 'rapier', c22: 'hammer', c23: 'handaxe', c24: 'greathammer', c25: 'frostblade' };
 for (const r of ROSTER) { r.gender = FEMALE.has(r.id) ? 'f' : 'm'; r.look.hairStyle = HAIR0[r.id]; r.weapon = WEAPON0[r.id]; }
 
 // 라틴어 코드네임 — 각자의 역할을 뜻하는 라틴어 단어(예: 총괄 지휘관 = Imperatrix, 방패 = Murus)
@@ -60,6 +61,7 @@ const LATIN = {
   c16: 'Praedator', c17: 'Vesper', c18: 'Ignis',
   c19: 'Aquila', c20: 'Sagitta', c21: 'Falco',
   c22: 'Auriga', c23: 'Vectrix', c24: 'Portitor',
+  c25: 'Praefectus',
 };
 for (const r of ROSTER) r.latin = LATIN[r.id];
 

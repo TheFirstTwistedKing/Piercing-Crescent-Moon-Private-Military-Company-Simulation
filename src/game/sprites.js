@@ -67,7 +67,7 @@ function drawInner(c, dir, frame, L0, accent, weapon, wings) {
     r(accent, back ? 12 : 3, 12 + (back ? ar : al), 1, 2); // 부서 완장
     if (wings && back) drawWings(r, 'up', frame);
     r(L.skin, 5, 3, 6, 6);
-    drawHair(r, back ? 'up' : 'down', L.hairStyle, L.hair);
+    drawHair(r, back ? 'up' : 'down', L.hairStyle, L.hair, L.hair2);
     if (!back) {
       r(ink, 6, 6, 1, 1); r(ink, 9, 6, 1, 1);
       if (L.extra === 'mask') r('#d9d6cf', 5, 7, 6, 2);
@@ -88,7 +88,7 @@ function drawInner(c, dir, frame, L0, accent, weapon, wings) {
     if (L.extra === 'scarf') r(adj(L.coat2, 40), 6, 9, 5, 2);
     r(L.coat, 7 + f1, 10, 2, 6); r(L.skin, 7 + f1, 16, 2, 1); r(accent, 7 + f1, 12, 2, 2);
     r(L.skin, 5, 3, 6, 6);
-    drawHair(r, 'side', L.hairStyle, L.hair);
+    drawHair(r, 'side', L.hairStyle, L.hair, L.hair2);
     r(ink, 9, 6, 1, 1);
     if (L.extra === 'mask') r('#d9d6cf', 8, 7, 3, 2);
     if (L.extra === 'glasses') { r('#1c1c20', 8, 6, 3, 1); r('#7fa3b5', 9, 6, 1, 1); }
@@ -114,7 +114,7 @@ function hat(r, view, back, L, accent, coatL) {
 }
 
 const hasWings = (u) => !!u.ab && u.ab.includes('dragon');
-const sigOf = (u) => [hasWings(u) ? 'W' : '', u.look.hairStyle, u.look.hair, u.weapon, u.look.hat, u.look.extra, u.look.skin, u.look.coat, u.look.coat2, u.look.pants].join('|');
+const sigOf = (u) => [hasWings(u) ? 'W' : '', u.look.hairStyle, u.look.hair, u.look.hair2 || '', u.weapon, u.look.hat, u.look.extra, u.look.skin, u.look.coat, u.look.coat2, u.look.pants].join('|');
 
 /** 스프라이트 시트(3프레임 × 4방향). 외형이 바뀌면 자동으로 다시 만든다. */
 export function getSheet(char) {

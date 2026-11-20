@@ -68,7 +68,12 @@ export function mountCustom(root, ctx, arg) {
     const color = h('input', { type: 'color', value: u.look.hair, 'aria-label': '머리색 직접 선택', oninput: (e) => { sim.setHair(id, u.look.hairStyle, e.target.value); scheduleSave(); paintStage(); } });
     color.addEventListener('change', () => paintPanel());
     const sw = h('div', { class: 'swatches' }, ...HAIR_COLORS.map((c) => h('button', { type: 'button', class: `sw ${u.look.hair.toLowerCase() === c ? 'on' : ''}`, style: `background:${c}`, 'aria-label': `머리색 ${c}`, onclick: () => { sim.setHair(id, u.look.hairStyle, c); Audio.sfx('click'); changed(); } })), color);
-    return h('div', {}, h('p', { class: 'f-label' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색'), sw);
+    const tipNow = (u.look.hair2 || '').toLowerCase();
+    const tipColor = h('input', { type: 'color', value: tipNow || '#c0261c', 'aria-label': '머리 끝색 직접 선택', oninput: (e) => { sim.setHairTip(id, e.target.value); scheduleSave(); paintStage(); } });
+    tipColor.addEventListener('change', () => paintPanel());
+    const tipSw = h('div', { class: 'swatches' }, h('button', { type: 'button', class: `sw none ${tipNow ? '' : 'on'}`, 'aria-label': '끝색 없음(단색)', title: '끝색 없음', onclick: () => { sim.setHairTip(id, null); Audio.sfx('click'); changed(); } }, '×'),
+      ...HAIR_COLORS.map((c) => h('button', { type: 'button', class: `sw ${tipNow === c ? 'on' : ''}`, style: `background:${c}`, 'aria-label': `머리 끝색 ${c}`, onclick: () => { sim.setHairTip(id, c); Audio.sfx('click'); changed(); } })), tipColor);
+    return h('div', {}, h('p', { class: 'f-label' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
   };
 
   const weaponTab = () => {

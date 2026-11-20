@@ -34,7 +34,18 @@ export const HAIR = Object.fromEntries(HAIR_STYLES.map((s) => [s.id, s]));
 export const HAIR_COLORS = ['#1c1a1f', '#3a2418', '#6b4a2b', '#8a5a34', '#c9a063', '#e6d39a', '#d9d9dc', '#8a8a92', '#a5382a', '#d9692e', '#e58fb0', '#4a78b8', '#3f9a86', '#7a5aa8'];
 
 /** r(color, x, y, w, h) 로 그린다. view: 'down' | 'up' | 'side'(오른쪽 보기; 왼쪽은 호출측에서 좌우반전) */
-export function drawHair(r, view, id, col) {
+/** 뿌리(col) → 끝(tip) 그라데이션. y 가 아래로 갈수록 tip 색에 가까워진다. 음영(sh/hi)은 col 기준 차이를 그대로 유지한다. */
+function gradient(r, col, tip) {
+  const ch = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }, b = ch(col), t0 = ch(tip);
+  const hexOf = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  return (c, x, y, w, hgt) => {
+    const d = ch(c).map((v, i) => v - b[i]);
+    for (let yy = y; yy < y + hgt; yy++) { const t = Math.max(0, Math.min(1, (yy - 3) / 3.5)), tt = t * t * (3 - 2 * t); r(hexOf(b.map((v, i) => v + (t0[i] - v) * tt + d[i])), x, yy, w, 1); }
+  };
+}
+
+export function drawHair(r0, view, id, col, tip = null) {
+  const r = tip ? gradient(r0, col, tip) : r0;
   const s = HAIR[id] || HAIR.m1; const sh = adj(col, -34), hi = adj(col, 26);
   const rows = s.rows ?? 2, side = s.side ?? 0, back = s.back ?? 0, k = s.k;
   if (k === 'bald') { r(sh, view === 'side' ? 6 : 6, 3, view === 'up' ? 4 : 4, 1); return; }

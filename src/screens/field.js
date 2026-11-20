@@ -96,7 +96,7 @@ export function mountField(root, ctx) {
     roster.classList.toggle('open', rosterOpen);
     const tabs = h('div', { class: 'tabs' }, ...[['units', '인원'], ['log', '로그']].map(([k, l]) => h('button', { type: 'button', class: tab === k ? 'on' : '', onclick: () => { tab = k; paintRoster(); } }, l)), h('button', { class: 'icon-btn x', type: 'button', 'aria-label': '닫기', html: icon('close', 16), onclick: () => { rosterOpen = false; paintRoster(); } }));
     let body;
-    if (tab === 'units') body = h('div', { class: 'rbody' }, ...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en, h('small', {}, d.ko)),
+    if (tab === 'units') body = h('div', { class: 'rbody' }, ...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en, h('small', {}, d.ko), h('button', { class: 'regroup', type: 'button', title: `${d.ko} 전원을 ${d.roomKo}(으)로 재집결`, 'aria-label': `${d.ko} 재집결`, onclick: () => regroup(d) }, '재집결')),
       ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${sel === u.id ? 'on' : ''} ${u.hp < 25 ? 'hurt' : ''}`, onclick: () => select(u.id, true) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin), u.isLeader ? h('span', { class: 'chip l ldchip' }, '팀장') : null), h('small', {}, sim.statusText(u)), h('span', { class: 'hpbar' }, h('i', { style: `width:${u.hp}%` })))))));
     else body = h('ol', { class: 'rbody log' }, ...sim.log.slice().reverse().map((e) => h('li', { class: e.kind }, h('time', {}, clockInfo(e.clock).text), h('span', {}, e.text))));
     roster.replaceChildren(tabs, body);
@@ -140,6 +140,11 @@ export function mountField(root, ctx) {
   };
   const refreshSheetLive = () => { const u = sel && sim.byId[sel]; if (!u || sheet.hidden) return; const sl = sheet.querySelector('.stat-line'); if (sl) sl.textContent = sim.statusText(u); const b = sheet.querySelector('.bars'); if (b) b.replaceWith(bars(u)); };
   const toastLocal = (t, kind = 'bad') => ctx.toast(t, kind);
+  const regroup = (d) => {
+    const r = sim.regroup(d.key);
+    if (!r.ok) { Audio.sfx('error'); toastLocal(r.reason || '재집결할 수 없습니다.'); return; }
+    Audio.sfx('send'); toastLocal(`${d.ko} ${r.moved.length}명 재집결${r.skipped.length ? ` · 제외 ${r.skipped.map((x) => `${x.name}(${x.why})`).join(', ')}` : ''}`, 'good'); paintRoster();
+  };
 
   /* ── 대화 엿듣기 ── */
   const dlg = h('div', { class: 'dlg', hidden: true, role: 'dialog', 'aria-label': '대화 엿듣기' }); dlg.open = false;
