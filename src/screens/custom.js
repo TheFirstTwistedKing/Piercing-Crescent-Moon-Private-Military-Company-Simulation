@@ -3,17 +3,18 @@ import * as Audio from '../core/audio.js';
 import { engine } from '../game/engine.js';
 import { DEPTS, DEPT } from '../game/data.js';
 import { HAIR_STYLES, HAIR_COLORS } from '../game/hair.js';
-import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, weaponIcon, iconRects } from '../game/weapons.js';
+import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, weaponIcon, iconRects2 } from '../game/weapons.js';
 import { fmtCredits } from '../game/sim.js';
 import { TRAITS, TRAIT, ABILITIES, ABILITY, RARITY, GACHA_ODDS, MAX_TRAITS, MAX_ABILITIES, fxLines } from '../game/traits.js';
 import { CSTATS, STAT_MAX, sumAlloc } from '../game/rules.js';
-import { drawPreview, OX } from '../game/sprites.js';
+import { drawPreview, OX, PAD, SW, SH } from '../game/sprites.js';
+import { RES } from '../game/res.js';
 import { ITEM, ITEMS, STAT_ITEM_CAP } from '../game/shop.js';
 import { h, icon, modal } from '../core/ui.js';
 
 const TABS = [['name', '이름'], ['look', '외형'], ['weapon', '무기'], ['stats', '스탯'], ['gear', '장비'], ['trait', '특성'], ['ability', '능력']];
 const fxList = (fx) => h('ul', { class: 'fxl' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
-const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(document.createElement('canvas'), { width: w, height: hh }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.translate(-OX, 0); drawPreview(c, u, opts); cv.className = 'px'; cv.style.width = w * scale + 'px'; cv.style.height = hh * scale + 'px'; return cv; };
+const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(document.createElement('canvas'), { width: w * RES, height: hh * RES }); const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.translate(-(OX + PAD) * RES, -PAD * RES); drawPreview(c, u, opts); cv.className = 'px'; cv.style.width = w * scale + 'px'; cv.style.height = hh * scale + 'px'; return cv; };
 
 export function mountCustom(root, ctx, arg) {
   const sim = engine.sim;
@@ -28,9 +29,9 @@ export function mountCustom(root, ctx, arg) {
   const pick = (nid) => { id = nid; gtab = U().gender; reveal = null; Audio.sfx('select'); paintAll(); };
 
   /* ── 중앙: 미리보기 ── */
-  const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 24, className: 'px stage-cv', 'aria-label': '캐릭터 미리보기' });
+  const cv = Object.assign(document.createElement('canvas'), { width: SW, height: SH, className: 'px stage-cv', 'aria-label': '캐릭터 미리보기' });
   const sc = cv.getContext('2d'); sc.imageSmoothingEnabled = false;
-  const drawStage = () => { sc.clearRect(0, 0, 32, 24); drawPreview(sc, U(), { dir, frame: walk ? [1, 0, 2, 0][frame % 4] : 0 }); };
+  const drawStage = () => { sc.clearRect(0, 0, SW, SH); drawPreview(sc, U(), { dir, frame: walk ? [1, 0, 2, 0][frame % 4] : 0 }); };
   const stageInfo = h('div', { class: 'stage-info' });
   const dirs = h('div', { class: 'dirs' }, ...[['down', '앞'], ['left', '왼쪽'], ['right', '오른쪽'], ['up', '뒤']].map(([d, l]) => h('button', { type: 'button', class: 'seg-b', 'data-d': d, onclick: () => { dir = d; Audio.sfx('click'); paintDirs(); drawStage(); } }, l)),
     h('button', { type: 'button', class: 'seg-b', 'data-w': '1', onclick: () => { walk = !walk; Audio.sfx('click'); paintDirs(); } }, '걷기'));
@@ -77,7 +78,7 @@ export function mountCustom(root, ctx, arg) {
     return h('div', {}, h('p', { class: 'f-label' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
   };
 
-  const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 16, height: 20, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '48px'; n.style.height = '60px'; return n; };
+  const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 32, height: 40, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '48px'; n.style.height = '60px'; return n; };
   const confirmEquip = (w) => {
     const u = U(); if (u.weapon === w.id) return; const left = sim.funds - w.fee, prev = WEAPON[u.weapon];
     modal({ title: `${w.name} 착용`, body: h('div', { class: 'wk-confirm' },
@@ -92,16 +93,16 @@ export function mountCustom(root, ctx, arg) {
   const chips = (fx) => h('ul', { class: 'fx-chips' }, ...fxLines(fx).map((l) => h('li', { class: l.good ? 'good' : 'bad' }, l.t)));
   const gunLine = (w) => w.gun ? h('small', { class: 'gun-line' }, `습격 전투: 사거리 ${w.gun.range} · 공격 간격 ${w.gun.cd}초${w.gun.splash ? ` · 범위 피해 ${w.gun.splash}` : ''}`) : null;
   /** 무기 영역만 잘라서 칸(boxW×boxH)에 정수 배율로 꽉 차게 그린다 — 작은 무기도 크게, 긴 무기도 잘림 없이 */
-  const fitIcon = (wid, boxW, boxH, maxScale = 12) => {
-    const rs = iconRects(wid), x0 = Math.min(...rs.map((r) => r[1])), y0 = Math.min(...rs.map((r) => r[2])), x1 = Math.max(...rs.map((r) => r[1] + r[3])), y1 = Math.max(...rs.map((r) => r[2] + r[4])), w = x1 - x0, hh = y1 - y0;
-    const sc = Math.max(1, Math.min(Math.floor(boxW / w), Math.floor(boxH / hh), maxScale)), n = Object.assign(document.createElement('canvas'), { width: w * sc, height: hh * sc, className: 'px', 'aria-hidden': 'true' }), g = n.getContext('2d'); g.imageSmoothingEnabled = false;
+  const fitIcon = (wid, boxW, boxH, maxScale = 12) => {   // 아이콘은 2배 해상도(32×40): 실제 픽셀 1개 = 논리 반 칸
+    const rs = iconRects2(wid), x0 = Math.min(...rs.map((r) => r[1])), y0 = Math.min(...rs.map((r) => r[2])), x1 = Math.max(...rs.map((r) => r[1] + r[3])), y1 = Math.max(...rs.map((r) => r[2] + r[4])), w = x1 - x0, hh = y1 - y0;
+    const sc = Math.max(1, Math.min(Math.floor(boxW / w), Math.floor(boxH / hh), Math.max(1, Math.floor(maxScale / 2)))), n = Object.assign(document.createElement('canvas'), { width: w * sc, height: hh * sc, className: 'px', 'aria-hidden': 'true' }), g = n.getContext('2d'); g.imageSmoothingEnabled = false;
     g.drawImage(weaponIcon(wid), x0, y0, w, hh, 0, 0, w * sc, hh * sc); n.style.width = `${w * sc}px`; n.style.height = `${hh * sc}px`; return h('div', { class: 'wk-ico', style: `width:${boxW}px;height:${boxH}px` }, n);
   };
   /** 현재 장착 판: 화면에서 가장 크게 보이는 요소(큰 도트 + 이름 + 성능) */
   const plate = (u) => {
     const cur = WEAPON[u.weapon], wk = cur.workshop ? WORKSHOPS.find((x) => x.id === cur.workshop) : null;
     return h('section', { class: 'wk-plate', style: `--wk:${wk ? wk.color : 'var(--amber)'}`, 'aria-label': '현재 장착한 무기' },
-      h('div', { class: 'wk-plate-art' }, matchMedia('(max-width: 560px)').matches ? fitIcon(cur.id, 72, 96) : fitIcon(cur.id, 116, 136)),
+      h('div', { class: 'wk-plate-art' }, matchMedia('(max-width: 560px)').matches ? fitIcon(cur.id, 96, 96) : fitIcon(cur.id, 128, 136)),
       h('div', { class: 'wk-plate-info' }, h('p', { class: 'eyebrow' }, `${u.name} · 현재 장착`), h('h3', {}, cur.name), h('p', { class: 'wk-plate-sub' }, `${typeOf(cur).name} · ${wk ? wk.name : '기본 무기'}`), chips(cur.fx), gunLine(cur),
         cur.workshop ? h('p', { class: 'wk-price' }, h('span', {}, `일일 유지비 ${fmtCredits(cur.upkeep)}`), cur.fx.upkeep ? h('span', {}, `탄약비 ${fmtCredits(cur.fx.upkeep)}`) : null) : null));
   };
@@ -111,14 +112,14 @@ export function mountCustom(root, ctx, arg) {
     const seg = h('div', { class: 'seg wk-seg', role: 'tablist', 'aria-label': '무기 분류' }, ...[['base', '기본 무기'], ...WORKSHOPS.map((x) => [x.id, x.short + ' 공방'])].map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(wtab === k), class: `seg-b ${wtab === k ? 'on' : ''}`, onclick: () => { wtab = k; Audio.sfx('click'); paintPanel(); } }, l)));
     if (wtab === 'base') {
       const card = (w) => h('button', { type: 'button', class: `card wp wpc ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
-        fitIcon(w.id, 56, 70, 5), h('b', {}, w.name), h('small', {}, w.desc), chips(w.fx), gunLine(w));
+        fitIcon(w.id, 72, 70, 6), h('b', {}, w.name), h('small', {}, w.desc), chips(w.fx), gunLine(w));
       const melee = WEAPONS.filter((w) => !w.gun), guns = WEAPONS.filter((w) => w.gun);
       return h('div', {}, seg, plate(u), section('근접 무기', melee.length, h('div', { class: 'grid wp-grid' }, ...melee.map(card))), section('총기 · 탄약비가 든다', guns.length, h('div', { class: 'grid wp-grid' }, ...guns.map(card))));
     }
     const wk = WORKSHOPS.find((x) => x.id === wtab), list = WORKSHOP_WEAPONS.filter((w) => w.workshop === wtab);
     const card = (w) => { const on = u.weapon === w.id, poor = sim.funds < w.fee;
       return h('button', { type: 'button', class: `card wp wpc wk ${on ? 'on' : ''} ${poor && !on ? 'poor' : ''}`, style: `--wk:${wk.color}`, 'aria-pressed': String(on), onclick: () => { if (on) return; Audio.sfx('click'); confirmEquip(w); } },
-        fitIcon(w.id, 56, 70, 5), h('b', {}, w.name), h('small', {}, `${typeOf(w).name} · ${wk.short}`), chips(w.fx), gunLine(w),
+        fitIcon(w.id, 72, 70, 6), h('b', {}, w.name), h('small', {}, `${typeOf(w).name} · ${wk.short}`), chips(w.fx), gunLine(w),
         h('p', { class: 'wk-price' }, h('span', { class: poor && !on ? 'short' : '' }, `착용비 ${fmtCredits(w.fee)}`), h('span', {}, `유지비 ${fmtCredits(w.upkeep)}/일`)), on ? h('i', { class: 'wk-on' }, '착용 중') : null); };
     const order = WEAPONS.map((x) => x.id).filter((bid) => list.some((w) => w.base === bid));
     return h('div', {}, seg, plate(u),

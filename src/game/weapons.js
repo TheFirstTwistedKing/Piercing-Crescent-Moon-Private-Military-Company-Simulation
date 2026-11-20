@@ -1,6 +1,7 @@
 // 무기 12종. fx 는 능력치/전투 보정, parts 는 [dx, dy, w, h, 색] (손 위치 기준, 위쪽이 -dy) — 스프라이트에 그려진다.
 import { buildWorkshopWeapons } from './workshop.js';
-import { gunPixels, GUN_PALETTES } from './weapon-art.js';
+import { gunArt, GUN_PALETTES, toRects } from './weapon-art.js';
+import { HAND_GUNS } from './gun-art2.js';
 const K1 = '#2c3036', M2 = '#59616b', M3 = '#8b95a1', BK = '#15171a', OL = '#4a5a3a', BR = '#c9a24a', RD = '#a5382a', GL = '#7fb0e8', WD = '#6a4a2a';   // 총기 색
 const S = '#c8d0d8', D = '#7e8892', H = '#eef3f7', W = '#8a6a3c', G = '#c9a24a', L = '#3a2a1c';
 export const WEAPONS = [
@@ -22,17 +23,17 @@ export const WEAPONS = [
   { id: 'battleaxe', name: '배틀엑스', desc: '양날 전투 도끼. 공격적이지만 허술하다.', fx: { str: 3, def: -1 }, parts: [[0, -12, 1, 15, W], [-3, -13, 3, 4, S], [1, -13, 3, 4, S], [0, -13, 1, 2, D]] },
   // ── 총기 6종: 기술 중심. fx.upkeep 은 탄약비(일일 유지비). 습격 전투에서는 원거리로 싸운다(gun 항목). 도트는 옆모습(총구가 앞쪽)으로 gunPixels 로 만든다.
   { id: 'pistol', name: '권총', desc: '가볍고 빠른 반자동 권총. 탄약비가 조금 든다.', fx: { skl: 1, speed: 0.05, upkeep: 40 }, gun: { range: 4, cd: 0.9, mul: 0.8 },
-    art: { kind: 'gun', px: gunPixels({ body: 3, bh: 2, bar: 2, bt: 1, gp: 1, top: 'iron' }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ body: 3, bh: 2, bar: 2, bt: 1, gp: 1, top: 'iron' }, HAND_GUNS.pistol), pal: GUN_PALETTES.gun },
   { id: 'smg', name: '기관단총', desc: '짧은 사거리에서 탄을 쏟아붓는다. 기술과 기동에 유리하고 탄약비가 든다.', fx: { skl: 2, speed: 0.03, upkeep: 100 }, gun: { range: 4.5, cd: 0.45, mul: 0.4 },
-    art: { kind: 'gun', px: gunPixels({ stock: 'fold', sl: 3, body: 4, bh: 2, bar: 3, bt: 1, gp: 2, mag: 'long', mp: 2, top: 'dot' }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ stock: 'fold', sl: 3, body: 4, bh: 2, bar: 3, bt: 1, gp: 2, mag: 'long', mp: 2, top: 'dot' }, HAND_GUNS.smg), pal: GUN_PALETTES.gun },
   { id: 'mg', name: '기관총', desc: '묵직한 연사 화력. 이동이 느려지고 탄약비가 크다.', fx: { str: 2, skl: 1, speed: -0.12, upkeep: 220 }, gun: { range: 6.5, cd: 0.35, mul: 0.3 },
-    art: { kind: 'gun', px: gunPixels({ stock: 'full', sl: 3, body: 5, bh: 3, bar: 3, bt: 1, hg: 2, gp: 2, mag: 'belt', mp: 2, top: 'carry', bipod: 1, fins: 1 }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ stock: 'full', sl: 3, body: 5, bh: 3, bar: 3, bt: 1, hg: 2, gp: 2, mag: 'belt', mp: 2, top: 'carry', bipod: 1, fins: 1 }, HAND_GUNS.mg), pal: GUN_PALETTES.gun },
   { id: 'sniper', name: '저격총', desc: '멀리서 한 발에 큰 피해를 준다. 정밀하지만 연사가 느리고 탄약비가 든다.', fx: { skl: 3, wis: 1, speed: -0.05, succ: 0.02, upkeep: 160 }, gun: { range: 9, cd: 2.4, mul: 1.7 },
-    art: { kind: 'gun', px: gunPixels({ stock: 'full', sl: 4, body: 4, bh: 2, bar: 6, bt: 1, mz: 'brake', gp: 2, mag: 'box', mp: 2, top: 'bigscope', bipod: 1 }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ stock: 'full', sl: 4, body: 4, bh: 2, bar: 6, bt: 1, mz: 'brake', gp: 2, mag: 'box', mp: 2, top: 'bigscope', bipod: 1 }, HAND_GUNS.sniper), pal: GUN_PALETTES.gun },
   { id: 'rocket', name: '로켓 런처', desc: '폭발탄을 쏘아 주변까지 피해를 준다. 느리고 탄약비가 크다.', fx: { str: 2, skl: 1, speed: -0.1, upkeep: 280 }, gun: { range: 7, cd: 2.6, mul: 0.95, splash: 1.6 },
-    art: { kind: 'gun', px: gunPixels({ tube: { len: 11, th: 3, flare: 'both', head: 'rocket', pad: 1, sight: 1, grip: 2 } }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ tube: { len: 11, th: 3, flare: 'both', head: 'rocket', pad: 1, sight: 1, grip: 2 } }, HAND_GUNS.rocket), pal: GUN_PALETTES.gun },
   { id: 'mortar', name: '박격포', desc: '먼 거리에서 포탄을 떨어뜨려 넓은 범위에 피해를 준다. 매우 느리고 탄약비가 크다.', fx: { skl: 1, wis: 2, speed: -0.18, upkeep: 300 }, gun: { range: 10, cd: 3.2, mul: 0.95, splash: 2 },
-    art: { kind: 'gun', px: gunPixels({ tube: { len: 7, th: 3, flare: 'rear', head: 'shell', plate: 1, bipod: 1, grip: 0 } }) }, pal: GUN_PALETTES.gun },
+    art: gunArt({ tube: { len: 7, th: 3, flare: 'rear', head: 'shell', plate: 1, bipod: 1, grip: 0 } }, HAND_GUNS.mortar), pal: GUN_PALETTES.gun },
 ];
 
 /* 공방 무기 90개(마그마 · 아크 · 웨폰&아머 × 18종류 × 5개)는 workshop.js 에 있다. 도트는 무기마다 따로 설계된다. */
@@ -63,8 +64,10 @@ function drawArt(r, view, w) {
   const c = (role) => w.pal[role] || '#ff00ff', a = w.art;
   if (a.kind === 'shield') { const [x, bottom] = view === 'down' ? [0, 17] : view === 'up' ? [5, 16] : [9, 17], y = bottom - a.h + 1; for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }   // 바닥선을 맞추고 크기는 무기마다 다르다
   if (a.kind === 'gauntlet') { const cx = a.w >> 1, hands = view === 'side' ? [8 - cx] : [3 - cx, 12 - cx], y = 18 - a.h; for (const x of hands) for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }
-  if (a.kind === 'gun') {   // 옆모습 총: 앞/옆 모습에서는 총구가 오른쪽, 뒷모습에서는 왼쪽(좌우 반전)
+  if (a.kind === 'gun') {   // 옆모습 총: 앞/옆 모습에서는 총구가 오른쪽, 뒷모습에서는 왼쪽(좌우 반전). 2배 해상도 도안(반 칸 단위)이 있으면 그것으로 그린다.
     const [hx, hy, dir] = view === 'down' ? [12, 15, 1] : view === 'up' ? [3, 15, -1] : [10, 15, 1];
+    if (!a.rects2) a.rects2 = a.px2 ? toRects(a.px2) : null;
+    if (a.rects2) { for (const [gx, gy, wd, , role] of a.rects2) r(c(role), dir > 0 ? hx + gx / 2 : hx + 0.5 - (gx + wd) / 2, hy + gy / 2, wd / 2, 0.5); return; }
     for (const [gx, gy, role] of a.px) r(c(role), hx + dir * gx, hy + gy, 1, 1);
     return;
   }
@@ -86,10 +89,20 @@ export function iconRects(id0) {
   else for (const [dx, dy, wd, ht, col] of w.parts) fill(col, 8 + dx, 16 + dy, wd, ht);
   return out;
 }
+/** 2배 해상도 아이콘(32×40)에 그릴 사각형 [색, x, y, w, h] — 총기는 반 칸 도안, 나머지는 iconRects 를 2배로 */
+export function iconRects2(id0) {
+  const w = WEAPON[id0];
+  if (w.art?.kind === 'gun' && w.art.px2) {
+    const col = (role) => w.pal[role] || '#ff00ff', px = w.art.px2, xs = px.map((q) => q[0]), ys = px.map((q) => q[1]);
+    const ox = Math.floor((32 - (Math.max(...xs) - Math.min(...xs) + 1)) / 2) - Math.min(...xs), oy = Math.floor((40 - (Math.max(...ys) - Math.min(...ys) + 1)) / 2) - Math.min(...ys);
+    return toRects(px).map(([x, y, wd, ht, role]) => [col(role), ox + x, oy + y, wd, ht]);
+  }
+  return iconRects(id0).map(([col, x, y, wd, ht]) => [col, x * 2, y * 2, wd * 2, ht * 2]);
+}
 const iconCache = new Map();
 export function weaponIcon(id0) {
   if (iconCache.has(id0)) return iconCache.get(id0);
-  const cv = Object.assign(document.createElement('canvas'), { width: 16, height: 20 }); const c = cv.getContext('2d');
-  for (const [col, x, y, wd, ht] of iconRects(id0)) { c.fillStyle = col; c.fillRect(x, y, wd, ht); }
+  const cv = Object.assign(document.createElement('canvas'), { width: 32, height: 40 }); const c = cv.getContext('2d');
+  for (const [col, x, y, wd, ht] of iconRects2(id0)) { c.fillStyle = col; c.fillRect(x, y, wd, ht); }
   iconCache.set(id0, cv); return cv;
 }

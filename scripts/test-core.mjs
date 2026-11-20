@@ -636,7 +636,7 @@ await t('무기 시각 품질(검증 회귀): 아이콘이 잘리지 않고, 색
   const all = [...WEAPONS, ...WORKSHOP_WEAPONS]; assert.equal(all.length, 109);
   for (const w of all) {
     for (const [c, x, y, wd, ht] of iconRects(w.id)) { assert.ok(x >= 0 && y >= 0 && x + wd <= 16 && y + ht <= 20, `${w.name} 아이콘이 잘림 (${x},${y},${wd},${ht})`); assert.notEqual(c, '#ff00ff', `${w.name} 아이콘 색 누락`); }
-    for (const v of ['down', 'up', 'side']) drawWeapon((c, x, y, wd, ht) => { assert.ok(/^#[0-9a-f]{6}$/.test(c) && c !== '#ff00ff', `${w.name} ${v} 색 누락`); assert.ok(x >= -8 && x + wd <= 24 && y >= 0 && y + ht <= 24, `${w.name} ${v} 범위 밖`); }, v, w.id);
+    for (const v of ['down', 'up', 'side']) drawWeapon((c, x, y, wd, ht) => { assert.ok(/^#[0-9a-f]{6}$/.test(c) && c !== '#ff00ff', `${w.name} ${v} 색 누락`); assert.ok(x >= -8.5 && x + wd <= 24.5 && y >= -0.5 && y + ht <= 24.5, `${w.name} ${v} 범위 밖`); }, v, w.id);
     assert.equal(fxLines(w.fx).length, Object.keys(w.fx).length, `${w.name} 효과가 화면에 모두 표시된다`); assert.ok(w.name && !/undefined|[{}]/.test(w.name + w.desc));
     if (w.gun) { const xs = w.art.px.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 16, `${w.name} 총기 길이 16칸 이내`); }
   }
@@ -647,5 +647,14 @@ await t('무기 시각 품질(검증 회귀): 아이콘이 잘리지 않고, 색
   for (const w of all) { const cells = []; drawWeapon((c, x, y, wd, ht) => cells.push([c, wd * ht]), 'down', w.id); const area = cells.reduce((a, c) => a + c[1], 0), mean = cells.reduce((a, c) => a + lum(c[0]) * c[1], 0) / area, hi = Math.max(...cells.map((c) => lum(c[0])));
     assert.ok(ratio(mean, med) >= 1.5, `${w.name} 평균색 대비 ${ratio(mean, med).toFixed(2)}`); assert.ok(ratio(hi, med) >= 4, `${w.name} 가장 밝은 색 대비 ${ratio(hi, med).toFixed(2)}`); if (w.workshop) (byWorkshop[w.workshop] ||= []).push(ratio(mean, med)); }
   for (const [k, v] of Object.entries(byWorkshop)) assert.ok(v.reduce((a, b) => a + b, 0) / v.length >= 2, `${k} 공방 평균 대비`);
+});
+await t('2배 해상도 총기 도안: 모든 총기에 반 칸 도안(px2)이 있고 색 누락이 없으며 범위·길이를 지키고 서로 다르다', () => {
+  const guns = [...WEAPONS, ...WORKSHOP_WEAPONS].filter((w) => w.art?.kind === 'gun'); assert.equal(guns.length, 36);
+  for (const w of guns) {
+    assert.ok(Array.isArray(w.art.px2) && w.art.px2.length > w.art.px.length, `${w.name} px2`);
+    for (const [x, y, role] of w.art.px2) { assert.ok(w.pal[role], `${w.name} 역할 ${role} 색 누락`); assert.ok(x >= -40 && x < 24 && y >= -30 && y < 14, `${w.name} 총기가 셀 밖 (${x},${y})`); }
+    const xs = w.art.px2.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 32, `${w.name} 길이 32반칸 이내`);
+  }
+  const sig = (w) => w.art.px2.map((q) => q.join(',')).sort().join(';'); assert.equal(new Set(guns.map(sig)).size, guns.length, '총기마다 2배 도안도 모두 다르다');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

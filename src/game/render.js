@@ -2,7 +2,8 @@
 import { WORLD_W, WORLD_H, MW, MH, TS, floorKind, renderStatic, LAMPS, CAMERAS, CAM_W, CAM_H, SLOTS, FURNACE } from './map.js';
 import { ITEM } from './shop.js';
 import { drawFurnitureIcon } from './furniture-art.js';
-import { getSheet, drawShadow, CW, CH, OX, DIR_INDEX } from './sprites.js';
+import { drawCellAt, drawShadow, CW, OX } from './sprites.js';
+import { RES } from './res.js';
 import { DEPT } from './data.js';
 import { clockInfo } from './sim.js';
 
@@ -12,15 +13,17 @@ const hash2 = (x, y) => { let h = (Math.imul(x + 1, 73856093) ^ Math.imul(y + 1,
 
 export class World {
   constructor() {
-    this.cv = Object.assign(document.createElement('canvas'), { width: WORLD_W, height: WORLD_H });
-    this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
+    const big = () => Object.assign(document.createElement('canvas'), { width: WORLD_W * RES, height: WORLD_H * RES });   // 실제 픽셀은 논리 칸의 RES 배 — 그리는 좌표는 논리 칸 그대로
+    this.cv = big();
+    this.ctx = this.cv.getContext('2d'); this.ctx.imageSmoothingEnabled = false; this.ctx.setTransform(RES, 0, 0, RES, 0, 0);
     this.static = renderStatic();
-    this.lightCv = Object.assign(document.createElement('canvas'), { width: WORLD_W, height: WORLD_H });
-    this.lightCtx = this.lightCv.getContext('2d');
+    this.base = big(); this.baseCtx = this.base.getContext('2d'); this.baseCtx.imageSmoothingEnabled = false; this.baseKey = '';   // 정적 지도 + 적설 + 가구를 합친 층(바뀔 때만 다시 만든다)
+    this.lightCv = big();
+    this.lightCtx = this.lightCv.getContext('2d'); this.lightCtx.setTransform(RES, 0, 0, RES, 0, 0);
     this.lightKey = -1;
     this.lamp = this.makeLampSprite(); this.glow = this.makeGlowSprite();
     this.selected = null; this.quality = 2;
-    this.snowCv = Object.assign(document.createElement('canvas'), { width: WORLD_W, height: WORLD_H }); this.snowKey = -1;
+    this.snowCv = big(); this.snowKey = -1;
     this.fog = this.makeFogSprite();
     this.seeds = Array.from({ length: 130 }, (_, i) => [hash1(i * 3 + 1), hash1(i * 3 + 2), hash1(i * 3 + 3)]);
   }
@@ -31,26 +34,29 @@ export class World {
   }
   // 마당의 적설: 칸마다 정해진 임계값보다 적설이 많으면 눈이 덮인다. 5% 단위로만 다시 그린다.
   rebuildSnow(level) {
-    const g = this.snowCv.getContext('2d'); g.clearRect(0, 0, WORLD_W, WORLD_H); const th = level / 100;
+    const g = this.snowCv.getContext('2d'); g.setTransform(RES, 0, 0, RES, 0, 0); g.clearRect(0, 0, WORLD_W, WORLD_H); const th = level / 100;
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
       if (floorKind[y * MW + x] !== 0) continue;
       const h = hash2(x, y), px = x * TS, py = y * TS;
-      if (h < th) { g.fillStyle = '#dce7f2'; g.fillRect(px, py, TS, TS); g.fillStyle = '#c4d4e6'; g.fillRect(px + ((h * 977) % 11 | 0), py + ((h * 613) % 11 | 0), 3, 1); g.fillStyle = '#f2f8fc'; g.fillRect(px + ((h * 331) % 12 | 0), py + ((h * 719) % 12 | 0), 2, 2); }
+      if (h < th) { g.fillStyle = '#dce7f2'; g.fillRect(px, py, TS, TS); g.fillStyle = '#c4d4e6'; g.fillRect(px + ((h * 977) % 11 | 0), py + ((h * 613) % 11 | 0), 3, 1); g.fillStyle = '#f2f8fc'; g.fillRect(px + ((h * 331) % 12 | 0), py + ((h * 719) % 12 | 0), 2, 2);
+        g.fillStyle = '#b9cce2'; g.fillRect(px + ((h * 513) % 14 | 0), py + ((h * 271) % 14 | 0), 1, 0.5); g.fillRect(px + ((h * 877) % 13 | 0), py + ((h * 151) % 14 | 0) + 0.5, 0.5, 0.5); g.fillStyle = '#ffffff'; g.fillRect(px + ((h * 457) % 13 | 0) + 0.5, py + ((h * 389) % 13 | 0), 1, 0.5); }
       else if (h < th + 0.18) { g.fillStyle = '#e4edf6'; g.fillRect(px + ((h * 421) % 8 | 0), py + ((h * 233) % 8 | 0), 5, 3); g.fillRect(px + ((h * 877) % 9 | 0), py + 9, 4, 2); }
     }
   }
-  drawFurniture(sim) {
-    for (const room of Object.keys(sim.placed)) sim.placed[room].forEach((id, i) => { if (id && SLOTS[room]?.[i]) { const [x, y] = SLOTS[room][i]; drawFurnitureIcon(this.ctx, ITEM[id], x * TS, y * TS); } });
+  // 정적 지도 + 적설 + 가구는 자주 안 바뀌므로 한 장으로 합쳐 두고 프레임마다 한 번만 복사한다.
+  rebuildBase(sim, snowLv) {
+    const c = this.baseCtx; c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.static, 0, 0); c.drawImage(this.snowCv, 0, 0); c.setTransform(RES, 0, 0, RES, 0, 0);
+    for (const room of Object.keys(sim.placed)) sim.placed[room].forEach((id, i) => { if (id && SLOTS[room]?.[i]) { const [x, y] = SLOTS[room][i]; drawFurnitureIcon(c, ITEM[id], x * TS, y * TS); } });
   }
   // 날씨 연출: 움직임은 느리고 투명도는 낮게(깜빡임·번쩍임 없음). 품질 0 에서는 입자를 생략한다.
   drawWeather(key, t, furnace) {
     const c = this.ctx, W = WORLD_W, H = WORLD_H, q = this.quality;
     if (key === 'rain') {
       c.fillStyle = 'rgba(70,90,120,.10)'; c.fillRect(0, 0, W, H);
-      if (q >= 1) { c.fillStyle = 'rgba(176,200,232,.42)'; for (const [a, b, d] of this.seeds) { const x = (((a * W + t * 0.045 * (0.8 + d * 0.4)) % W) + W) % W, y = (((b * H + t * 0.28 * (0.8 + d * 0.4)) % H) + H) % H; c.fillRect(x | 0, y | 0, 1, 4); } }
+      if (q >= 1) { c.fillStyle = 'rgba(176,200,232,.42)'; for (const [a, b, d] of this.seeds) { const x = (((a * W + t * 0.045 * (0.8 + d * 0.4)) % W) + W) % W, y = (((b * H + t * 0.28 * (0.8 + d * 0.4)) % H) + H) % H; c.fillRect(Math.round(x * RES) / RES, Math.round(y * RES) / RES, 0.5, 3.5); } }
     } else if (key === 'cold') {
       c.fillStyle = 'rgba(110,150,214,.13)'; c.fillRect(0, 0, W, H);
-      if (q >= 1) { c.fillStyle = 'rgba(244,248,255,.85)'; for (const [a, b, d] of this.seeds) { const x = (((a * W + Math.sin(t / 900 + d * 9) * 10 + t * 0.012) % W) + W) % W, y = (((b * H + t * (0.022 + d * 0.02)) % H) + H) % H; c.fillRect(x | 0, y | 0, d > 0.7 ? 2 : 1, d > 0.7 ? 2 : 1); } }
+      if (q >= 1) { c.fillStyle = 'rgba(244,248,255,.85)'; for (const [a, b, d] of this.seeds) { const x = (((a * W + Math.sin(t / 900 + d * 9) * 10 + t * 0.012) % W) + W) % W, y = (((b * H + t * (0.022 + d * 0.02)) % H) + H) % H; c.fillRect(Math.round(x * RES) / RES, Math.round(y * RES) / RES, d > 0.7 ? 1 : 0.5, d > 0.7 ? 1 : 0.5); } }
     } else if (key === 'fog') {
       c.fillStyle = 'rgba(204,213,224,.24)'; c.fillRect(0, 0, W, H);
       if (q >= 1) for (let i = 0; i < 6; i++) { const x = (((i * 190 + t * 0.006 * (1 + i % 3)) % (W + 300)) + W + 300) % (W + 300) - 150, y = 60 + ((i * 97) % 440); c.drawImage(this.fog, x - 120, y - 120, 280, 240); }
@@ -89,21 +95,20 @@ export class World {
   }
   draw(sim, t) {
     const c = this.ctx;
-    c.drawImage(this.static, 0, 0);
     const lv = Math.round(sim.snow / 5); if (lv !== this.snowKey) { this.rebuildSnow(lv * 5); this.snowKey = lv; }
-    c.drawImage(this.snowCv, 0, 0);
-    this.drawFurniture(sim);
+    const bk = lv + '|' + Object.values(sim.placed).map((a) => a.join(',')).join('|'); if (bk !== this.baseKey) { this.rebuildBase(sim, lv); this.baseKey = bk; }
+    c.drawImage(this.base, 0, 0, WORLD_W, WORLD_H);
     const list = sim.units.filter((u) => !u.away).sort((a, b) => a.y - b.y);
     for (const u of list) {
       drawShadow(c, u.x, u.y);
       const f = u.moving ? WALK_FRAMES[Math.floor(u.anim) % 4] : 0;
-      c.drawImage(getSheet(u), f * CW, DIR_INDEX[u.dir] * CH, CW, CH, Math.round(u.x - 8 - OX), Math.round(u.y - 22), CW, CH);
+      drawCellAt(c, u, f, u.dir, Math.round((u.x - 8 - OX) * RES) / RES, Math.round((u.y - 22) * RES) / RES);
     }
     const a = this.nightAlpha(sim.clock);
     if (a > 0.01) {
       const key = Math.round(a * 50) + this.quality * 100;
       if (key !== this.lightKey) { this.rebuildLight(a); this.lightKey = key; }
-      c.drawImage(this.lightCv, 0, 0);
+      c.drawImage(this.lightCv, 0, 0, WORLD_W, WORLD_H);
       if (this.quality >= 2) { c.globalCompositeOperation = 'lighter'; for (const u of list) if (u.mode === 'patrol') c.drawImage(this.glow, u.x - 30, u.y - 40, 60, 60); c.globalCompositeOperation = 'source-over'; }
     }
     this.drawWeather(sim.weather.today, t, sim.furnaceActive);
@@ -137,11 +142,11 @@ export function viewRect(cam, w, h, scale) {
   return { x: cx - vw / 2, y: cy - vh / 2, w: vw, h: vh, cx, cy };
 }
 export function blitView(dst, world, cam, w, h, scale) {
-  dst.imageSmoothingEnabled = false;
+  dst.imageSmoothingEnabled = scale < RES * 1.34; dst.imageSmoothingQuality = 'high';   // 실제 픽셀 하나가 화면 1.34픽셀보다 작게 줄어드는 확대율에서만 부드럽게(가는 선 깜빡임 방지)
   dst.fillStyle = '#050403'; dst.fillRect(0, 0, w, h);
   const r = viewRect(cam, w, h, scale);
   const sx = Math.max(0, r.x), sy = Math.max(0, r.y), ex = Math.min(WORLD_W, r.x + r.w), ey = Math.min(WORLD_H, r.y + r.h);
-  if (ex > sx && ey > sy) dst.drawImage(world.cv, sx, sy, ex - sx, ey - sy, (sx - r.x) * scale, (sy - r.y) * scale, (ex - sx) * scale, (ey - sy) * scale);
+  if (ex > sx && ey > sy) dst.drawImage(world.cv, sx * RES, sy * RES, (ex - sx) * RES, (ey - sy) * RES, (sx - r.x) * scale, (sy - r.y) * scale, (ex - sx) * scale, (ey - sy) * scale);
   return r;
 }
 export function drawFeed(dst, world, camIdx, w, h) {
