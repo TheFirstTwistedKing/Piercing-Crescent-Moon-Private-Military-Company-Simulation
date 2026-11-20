@@ -6,5 +6,5 @@ import { BODY_FRAMES } from './body-frames.js';
 /** 한 프레임: rows(글자 격자, 셀 32×(발바닥 43행)), ox · oy(실제 x = ox + 칸, 실제 y = oy + 줄), head(머리뼈 x 범위 · 피부 윗줄). 왼쪽 보기는 시트의 왼쪽 행을 좌우반전해 저장했으므로 그리는 쪽이 한 번 더 뒤집는다. */
 export function bodyFrame(dir, frame) {   // hair: 은발 원본 머리카락(e1) 도안의 왼쪽 위 칸(프레임 좌표)
   const f = BODY_FRAMES[dir][frame % 3], ox = Math.round(16 - (f.head[0] + f.head[1] + 1) / 2);   // 머리 중심을 몸 가운데(x=16)에 고정 → 걸어도 머리가 좌우로 흔들리지 않는다
-  return { rows: f.rows, ox, oy: 1, legRow: f.leg ?? f.top + 29, hair: { x: f.hair[0], y: f.hair[1] }, head: { x0: f.head[0], x1: f.head[1], y0: f.top, y1: f.top + 13 }, eyes: dir === 'up' ? null : { y: f.top + 8 } };
+  return { rows: f.rows, ox, oy: 1, legRow: f.leg ?? f.top + 29, sp: f.sp, hair: { x: f.hair[0], y: f.hair[1] }, head: { x0: f.head[0], x1: f.head[1], y0: f.top, y1: f.top + 13 }, eyes: dir === 'up' ? null : { y: f.top + 8 } };
 }

@@ -3,6 +3,8 @@ import { DEPT } from './data.js';
 import { drawHair, adj } from './hair.js';
 import { drawWeapon, WEAPON, gunHandX } from './weapons.js';
 import { bodyFrame } from './body-art.js';
+import { OUTFIT } from './outfits.js';
+import { buildOutfit, outfitPalette } from './outfit.js';
 import { RES } from './res.js';
 
 export const CW = 32, CH = 24, OX = 8; // 논리 칸 기준: 날개가 펼쳐질 좌우 여백 8칸 씩 (몸은 셀 안 x=8..23)
@@ -65,8 +67,10 @@ function bodyPalette(L, accent) {
     B: '#0a0a0c', C: sleeve, c: pants, E: '#aaaaaa', D: '#dcdcdc', U: adj(accent, -70), V: adj(accent, -30), R: accent, r: adj(accent, -60), Q: adj(accent, 34),
   };
 }
-function drawBody(D, frameData, L, accent) {
-  const pal = bodyPalette(L, accent), { rows, ox, oy, legRow } = frameData;
+const outfitCache = new Map();
+function outfitRows(bk, frame, o) { const k = `${bk}${frame % 3}${o.id}`; let r = outfitCache.get(k); if (!r) { r = buildOutfit(bk, frame % 3, o.spec); outfitCache.set(k, r); } return r; }
+function drawBody(D, frameData, L, accent, bk, frame) {
+  const o = OUTFIT[L.outfit], pal = o ? { ...bodyPalette(L, accent), ...outfitPalette(o.spec.pal) } : bodyPalette(L, accent), { ox, oy, legRow } = frameData, rows = o ? outfitRows(bk, frame, o) : frameData.rows;   // 복장이 있으면 몸 프레임을 복장 설계대로 다시 칠한 것을 그린다
   rows.forEach((row, y) => {
     let x = 0; while (x < row.length) {
       const ch = row[x]; if (ch === '.') { x++; continue; }
@@ -84,8 +88,8 @@ function drawInner(c, wc, dir, frame, L, accent, weapon, wings, rec) {
   const view = dir === 'down' ? 'down' : dir === 'up' ? 'up' : 'side', mirror = dir === 'left';
   for (const g of [c, wc]) { g.save(); if (mirror) { g.translate(16, 0); g.scale(-1, 1); } }
   if (wings && view !== 'up') drawWings(r, view, frame);
-  const fd = bodyFrame(dir === 'left' ? 'left' : view === 'side' ? 'right' : view, frame);
-  drawBody(D, fd, L, accent);
+  const bk = dir === 'left' ? 'left' : view === 'side' ? 'right' : view, fd = bodyFrame(bk, frame);
+  drawBody(D, fd, L, accent, bk, frame);
   if (wings && view === 'up') drawWings(r, 'up', frame);
   drawHair(r, mirror ? 'sideL' : view, L.hairStyle, L.hair, L.hair2, { x0: fd.ox + fd.head.x0, x1: fd.ox + fd.head.x1, top: fd.oy + fd.head.y0, ax: fd.ox + fd.hair.x, ay: fd.oy + fd.hair.y });   // sideL: 왼쪽 보기 전용 도안(있는 스타일만)
   headGear(D, view, L, accent, fd);
@@ -160,7 +164,7 @@ function finish(c, rec, W = SW, H = SH) {
 }
 
 const hasWings = (u) => !!u.ab && u.ab.includes('dragon');
-const sigOf = (u) => [hasWings(u) ? 'W' : '', u.look.hairStyle, u.look.hair, u.look.hair2 || '', u.weapon, u.look.hat, u.look.extra, u.look.skin, u.look.coat, u.look.coat2, u.look.pants].join('|');
+const sigOf = (u) => [hasWings(u) ? 'W' : '', u.look.outfit || '', u.look.hairStyle, u.look.hair, u.look.hair2 || '', u.weapon, u.look.hat, u.look.extra, u.look.skin, u.look.coat, u.look.coat2, u.look.pants].join('|');
 
 // 셀 하나를 별도 캔버스(SW×SH)에 그려 마감(외곽선·음영)까지 끝낸 뒤 돌려준다. 같은 캔버스를 재사용하므로 호출 즉시 복사해야 한다.
 let scratch = null;
@@ -185,8 +189,8 @@ export function getSheet(char) {
 export function drawCellAt(g, char, frame, dir, x, y) { g.drawImage(getSheet(char), frame * SW, DIR_INDEX[dir] * SH, SW, SH, x - PAD, y - PAD, CW + PAD * 2, CH + PAD * 2); }
 
 /** 미리보기용: 임의의 외형(머리/색/무기)으로 한 칸을 SW×SH 픽셀 캔버스에 그린다. */
-export function drawPreview(ctx, char, { dir = 'down', frame = 0, hairStyle, hair, weapon, ab } = {}) {
-  const look = { ...char.look, hairStyle: hairStyle ?? char.look.hairStyle, hair: hair ?? char.look.hair };
+export function drawPreview(ctx, char, { dir = 'down', frame = 0, hairStyle, hair, weapon, ab, outfit } = {}) {
+  const look = { ...char.look, hairStyle: hairStyle ?? char.look.hairStyle, hair: hair ?? char.look.hair, outfit: outfit === undefined ? char.look.outfit : outfit };
   ctx.drawImage(cellCanvas(dir, frame, look, DEPT[char.dept].color, weapon === undefined ? char.weapon : weapon, hasWings({ ab: ab ?? char.ab })), 0, 0);
 }
 

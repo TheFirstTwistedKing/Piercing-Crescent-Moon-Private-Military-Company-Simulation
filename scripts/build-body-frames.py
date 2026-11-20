@@ -75,18 +75,18 @@ for name, ri in (('down', 0), ('up', 1), ('left', 2), ('right', 3)):
         g = [''.join(r) for r in g]; top = top_of(g)
         if name == 'left': g = mirror(g); pat = mirror(pat); hx = SW - 1 - c1                        # 왼쪽 보기는 오른쪽 보기 형태로(좌우반전) 저장 → 게임이 다시 반전
         xs = [c for r in range(top + 2, top + 7) for c, ch in enumerate(g[r]) if ch != '.']          # 귀를 뺀 머리뼈 폭
-        seq.append(dict(rows=g, head=[min(xs), max(xs)], top=top, leg=st + SHIFT_Y + 29, hair=[hx, hy]))
+        seq.append(dict(rows=g, head=[min(xs), max(xs)], top=top, leg=st + SHIFT_Y + 29, sp=sp + SHIFT_Y, hair=[hx, hy]))
         hair.setdefault(name, pat)
         if hair[name] != pat: raise SystemExit(f'머리카락 도안이 프레임마다 다름: {name} {game_f}')
         info.append((name, game_f, top, st + SHIFT_Y, sp + SHIFT_Y, hx, hy))
     frames[name] = seq
 for i in info: print(i)
 
-out = "// 사람 몸 프레임 — 복원한 시트(art/sprites)에서 scripts/build-body-frames.py 가 만든 데이터(직접 고치지 말 것).\n// 몸 = 은발 걷기 시트 · 머리 = 맨몸 시트(대머리). 셀 32×(발바닥 43행). 글자 역할: body-art.js 머리말 참고.\n// head: 머리뼈 x 범위 · top: 대머리 정수리 줄 · leg: 다리 구역 시작 줄 · hair: 은발 원본 머리카락(e1) 도안의 왼쪽 위 칸(프레임 좌표).\nexport const BODY_FRAMES = {\n"
+out = "// 사람 몸 프레임 — 복원한 시트(art/sprites)에서 scripts/build-body-frames.py 가 만든 데이터(직접 고치지 말 것).\n// 몸 = 은발 걷기 시트 · 머리 = 맨몸 시트(대머리). 셀 32×(발바닥 43행). 글자 역할: body-art.js 머리말 참고.\n// head: 머리뼈 x 범위 · top: 대머리 정수리 줄 · leg: 다리 구역 시작 줄 · sp: 목 아래(몸) 시작 줄 · hair: 은발 원본 머리카락(e1) 도안의 왼쪽 위 칸(프레임 좌표).\nexport const BODY_FRAMES = {\n"
 for name, seq in frames.items():
     out += f"  {name}: [\n"
     for f in seq:
-        out += f"    {{ head: [{f['head'][0]}, {f['head'][1]}], top: {f['top']}, leg: {f['leg']}, hair: [{f['hair'][0]}, {f['hair'][1]}], rows: [\n" + "".join(f"      '{r}',\n" for r in f['rows']) + "    ] },\n"
+        out += f"    {{ head: [{f['head'][0]}, {f['head'][1]}], top: {f['top']}, leg: {f['leg']}, sp: {f['sp']}, hair: [{f['hair'][0]}, {f['hair'][1]}], rows: [\n" + "".join(f"      '{r}',\n" for r in f['rows']) + "    ] },\n"
     out += "  ],\n"
 out += "};\n"
 open('src/game/body-frames.js', 'w').write(out)
