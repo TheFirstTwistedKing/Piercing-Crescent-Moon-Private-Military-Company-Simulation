@@ -221,6 +221,42 @@ function formShade(g, bx, mid, c0) {
   return out;
 }
 
+/** 실루엣 다듬기 — rect 로 쌓은 네모난 덩어리를 둥글게: ① 위쪽 모서리를 두 번 깎아 돔 모양 ② 큰 덩어리의 아래쪽 모서리 한 번 ③ 정수리·앞머리 끝에 잔머리 1칸. (가는 가닥은 건드리지 않는다) */
+function sculpt(g, view) {
+  const has = (x, y) => g.has(x, y), hs = (n) => { let h = (n * 2246822519) >>> 0; h = ((h ^ (h >> 15)) * 3266489917) >>> 0; return ((h ^ (h >> 13)) >>> 0) / 4294967296; };
+  let pts = [...g.m.values()]; if (pts.length < 30) return;
+  let y0 = 99, y1 = -1; for (const [, y] of pts) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); } const H = Math.max(6, y1 - y0 + 1);
+  const runH = (x, y) => { let a = x, b = x; while (has(a - 1, y)) a--; while (has(b + 1, y)) b++; return b - a + 1; }, runV = (x, y) => { let a = y, b = y; while (has(x, a - 1)) a--; while (has(x, b + 1)) b++; return b - a + 1; };
+  const pass = (topMinRun, botMinRun) => {
+    const del = [];
+    for (const [x, y] of g.m.values()) {
+      const up = has(x, y - 1), dn = has(x, y + 1), l = has(x - 1, y), r = has(x + 1, y), vt = (y - y0) / H;
+      if (!up && dn && ((!l && r) || (!r && l)) && runH(x, y) >= topMinRun && runV(x, y) >= 3) del.push([x, y]);
+      else if (botMinRun && !dn && up && ((!l && r) || (!r && l)) && vt > 0.5 && runH(x, y) >= botMinRun && runV(x, y) >= 5) del.push([x, y]);
+    }
+    for (const [x, y] of del) g.del(x, y);
+  };
+  pass(4, 6); pass(5, 0); if (view !== 'side') pass(9, 0);
+  // 앞머리 끝 흐름: 한쪽(왼쪽)은 길게 내려오고 반대쪽은 짧게 쓸어올린 비대칭 + 끝을 뾰족하게 — 앞모습/옆모습만
+  if (view !== 'up') {
+    const cxm = view === 'down' ? 15.5 : 17, sw = view === 'down' ? 1 : -1;
+    for (const [x, y] of [...g.m.values()]) {
+      if (has(x, y + 1) || !has(x, y - 1) || y > 12 || y < 8) continue;
+      const delta = Math.round(1.7 * sw * (cxm - (x + 0.5)) / 7);          // +: 길게, −: 짧게
+      if (delta >= 1 && y + 1 <= 12 && runV(x, y) >= 3) g.set(x, y + 1);
+      else if (delta <= -1 && runV(x, y) >= 4) { g.del(x, y); if (delta <= -2 && has(x, y - 1) && runV(x, y - 1) >= 4) g.del(x, y - 1); }
+    }
+  }
+  // 잔머리: 정수리 윗선 · 앞머리 끝에 1칸 삐져나온 가닥
+  pts = [...g.m.values()]; const add = [];
+  for (const [x, y] of pts) {
+    const vt = (y - y0) / H;
+    if (!has(x, y - 1) && y > 0 && vt < 0.2 && runH(x, y) >= 4 && has(x, y + 1) && hs(x * 13 + y * 7) < 0.2) add.push([x, y - 1]);
+    if (!has(x, y + 1) && vt > 0.35 && vt < 0.75 && y + 1 <= 11 && has(x, y - 1) && has(x, y - 2) && runH(x, y) >= 3 && hs(x * 5 + y * 11) < 0.24) add.push([x, y + 1]);
+  }
+  for (const [x, y] of add) g.set(x, y);
+}
+
 export function drawHair3(P, view, style, col, tip, box) {
   if (style.sheet) return drawSheetHair(P, view, style, col, tip, box);
   const { g: vg } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
@@ -234,6 +270,7 @@ export function drawHair3(P, view, style, col, tip, box) {
     if (vg.has(vx, vy)) { g.set(tx, ty); const mk = vg.mark.get(vg.k(vx, vy)); if (mk) g.mark.set(g.k(tx, ty), mk); }
   }
   const mid = (x, y) => { let rgb = c0; if (t0) { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); rgb = c0.map((v, i) => v + (t0[i] - v) * tt); } return rgb; };
+  sculpt(g, view);
   const out = formShade(g, bx, mid, c0);
   // 같은 줄에서 같은 색이 이어지면 한 사각형으로
   const rows = new Map(); for (const [x, y, c] of out.values()) { if (!rows.has(y)) rows.set(y, []); rows.get(y).push([x, c]); }
