@@ -22,7 +22,7 @@ export class Cv {
     for (let i = 0; i <= n; i++) {
       const t = i / n, wd = Math.max(o.minW ?? 1, w * Math.pow(1 - t, o.taper ?? 0.75) + (o.tipW ?? 0)), nx = -Math.sin(a), ny = Math.cos(a);
       const acc = o.acc === true || (o.accTip !== undefined && t >= o.accTip) || (o.accRoot !== undefined && t <= o.accRoot) ? 1 : 0;
-      for (let s = -wd / 2; s <= wd / 2 + 0.01; s += 0.5) this.put(sr(px + nx * s), Math.round(py + ny * s), { layer: L, pos: wd <= 1.4 ? 0 : s / (wd / 2), nx, ny, t, acc, kind: 'lock' });
+      for (let s = -wd / 2; s <= wd / 2 + 0.01; s += 0.5) this.put(sr(px + nx * s), Math.round(py + ny * s), { layer: L, pos: wd <= 1.4 ? 0 : s / (wd / 2), nx, ny, t, acc, kind: 'lock', gap: !!o.gap });
       a += (curv + (o.curv2 || 0) * t + (o.wave ? o.wave.amp * Math.sin(o.wave.f * i + (o.wave.ph || 0)) : 0)) * 0.5 * RAD; px += Math.cos(a) * step; py += Math.sin(a) * step;
     }
   }
@@ -37,7 +37,7 @@ export class Cv {
   /** 머리 숱(덩어리): span(v) → [[u0,u1], ...] 구간 목록을 줄마다 채운다(v0..v1). 가닥 사이를 메워 속이 비지 않게 한다. */
   mass(span, v0, v1, o = {}) {
     const L = this.next();
-    for (let v = Math.ceil(v0); v <= v1; v++) for (const [a, b] of span(v) || []) for (let u = Math.ceil(a); u <= Math.floor(b); u++) if (!o.clip || !o.clip(u, v)) this.put(u, v, { layer: L, pos: 0, nx: 0, ny: -1, t: 0, acc: o.acc ? 1 : 0, kind: 'mass', mu: u + 0.5, mv: v, sheen: o.sheen ?? -3, bandV: o.bandV ?? 99 });
+    for (let v = Math.ceil(v0); v <= v1; v++) for (const [a, b] of span(v) || []) for (let u = Math.ceil(a); u <= Math.floor(b); u++) if (!o.clip || !o.clip(u, v)) this.put(u, v, { layer: L, pos: 0, nx: 0, ny: -1, t: 0, acc: o.acc ? 1 : 0, kind: 'mass', mu: u + 0.5, mv: v, sheen: o.sheen ?? -3, bandV: o.bandV ?? 99, dim: o.dim ?? 1 });
   }
   /** 땋은 머리/묶음 꼬리: (x,y)에서 아래로 len 칸, 폭 w(끝으로 갈수록 가늘어짐), 어긋난 마디 + 포인트색 마디. */
   braid(x, y, len, w, o = {}) {
@@ -93,7 +93,7 @@ function render(cv, view, c0, cA) {
     } else if (p.kind === 'mass') {
       // 숱 덩어리: 위쪽·정수리 쪽이 밝고, 세로 결(어긋난 줄) + 빛 줄기(sheen) + 아래·바깥으로 갈수록 어두움
       const u = p.mu, v = p.mv, streak = (((Math.round(u) + 40 + Math.floor(v / 5)) % 4) + 4) % 4 === 0 && v > 1;
-      lv = 2 + (v < -1.5 ? 1 : 0) + (Math.abs(u - (side ? p.sheen + 3 : p.sheen)) < 1.1 && v > -2 ? 1 : 0) - (streak ? 1 : 0) - (v > p.bandV ? 1 : 0);
+      lv = 2 + (v < -1.5 ? 1 : 0) + (Math.abs(u - (side ? p.sheen + 3 : p.sheen)) < 1.1 && v > -2 ? 1 : 0) - (streak ? 1 : 0) - (v > p.bandV ? 1 : 0) - (p.dim || 0);
       if (side ? u > 3.5 : Math.abs(u) > 8.2) lv -= 1;
     } else {
       const facing = p.nx * Lx + p.ny * Ly, wide = p.pos !== 0;
@@ -102,6 +102,7 @@ function render(cv, view, c0, cA) {
       if (p.t > 0.86) lv -= 1;                                                  // 끝
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (lay(x + dx, y + dy) > p.layer) { lv -= 1; break; }   // 위 가닥에 눌린 경계
     }
+    if (p.gap) lv = 0;                                                            // 가닥 사이 어두운 틈
     lv = Math.max(0, Math.min(4, lv));
     let off = LV[lv] * (lv >= 3 ? hi : lo); const base = p.acc ? cA : c0;
     if (edge) off = -92 * lo - (cv.has(x, y + 1) ? 0 : 8);                      // 윤곽
