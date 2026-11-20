@@ -94,6 +94,15 @@ export const MISSIONS = [
 ].map(([dept, id, name, dur, risk, reward, stat]) => ({ dept, id, name, dur, risk, reward, stat }));
 export const MISSION = Object.fromEntries(MISSIONS.map((m) => [m.id, m]));
 
+// 단체 임무: 여러 부서 인원이 함께 출동한다. min~max 명, 보상이 크고 위험도 높다. (한 번 굴려 전원이 같은 결과를 받는다)
+export const GROUP_MISSIONS = [
+  ['gm1', '거점 합동 소탕 작전', 240, 0.5, 30000, 'cmb', '적 거점을 여러 부서가 함께 소탕한다. 전투력이 중요하다.'],
+  ['gm2', '대규모 호송 작전', 300, 0.4, 26000, 'def', '대형 호송대를 끝까지 지켜 낸다. 방어력이 중요하다.'],
+  ['gm3', '폐허 정밀 수색', 210, 0.3, 20000, 'int', '무너진 도시를 샅샅이 수색한다. 정보력이 중요하다.'],
+  ['gm4', '긴급 구호 합동 작전', 180, 0.25, 16000, 'med', '고립된 마을에 구호 물자와 의료진을 보낸다. 의료 능력이 중요하다.'],
+].map(([id, name, dur, risk, reward, stat, desc]) => ({ id, name, dur, risk, reward, stat, desc, dept: 'group', min: 3, max: 6 }));
+export const GMISSION = Object.fromEntries(GROUP_MISSIONS.map((m) => [m.id, m]));
+
 export const STAT_KO = { cmb: '전투', def: '방어', mob: '기동', med: '의료', int: '정보' };
 
 // 순찰 경로 (타일 좌표 웨이포인트)는 map.js 의 PATROLS 와 id 로 연결

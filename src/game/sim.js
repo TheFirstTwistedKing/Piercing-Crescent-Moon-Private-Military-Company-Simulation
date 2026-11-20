@@ -1,5 +1,5 @@
 // 시뮬레이션 코어. 렌더/DOM 과 완전히 분리되어 Node 에서도 테스트된다.
-import { ROSTER, DEPT, DEPTS, MISSION, PATROL_META, PATROL_EVENTS, MONO, ROOM_LABEL } from './data.js';
+import { ROSTER, DEPT, DEPTS, MISSION, GMISSION, PATROL_META, PATROL_EVENTS, MONO, ROOM_LABEL } from './data.js';
 import { TS, GATE, PATROLS, roomFreeTiles, findPath, ROOMS, setSlotSolid, SLOTS, isOutdoor, FURNACE, yardWorkTiles } from './map.js';
 import { WEATHERS, rollWeather, dailySnow, START_SNOW, SNOW_SLOW, TASKS } from './weather.js';
 import { ITEM, STAT_ITEM_CAP, FURN_SLOTS, ROOM_KEYS } from './shop.js';
@@ -67,6 +67,7 @@ export class Sim {
     this.weather = { today: rollWeather(rand), next: rollWeather(rand) }; this.snow = START_SNOW;
     this.inv = {}; this.placed = Object.fromEntries(ROOM_KEYS.map((k) => [k, Array(FURN_SLOTS).fill(null)]));
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
+    this.groups = {}; this.gseq = 0;
     this.ev = { pending: null, cd: {}, today: 0, acc: 0, buffs: [], on: Sim.EVENTS_ON, resume: 0 };
     this.listeners = {}; this.dirty = false;
     this.syncSlots();
@@ -463,7 +464,7 @@ export class Sim {
 
   statusText(u) {
     if (u.mode === 'mission') {
-      const m = MISSION[u.mission.id];
+      const m = MISSION[u.mission.id] || GMISSION[u.mission.id];
       if (u.phase === 'away') return `임무 수행 중 · ${m.name} (남은 ${Math.ceil(u.mission.remaining)}분)`;
       return `임무 ${u.phase === 'out' ? '출발' : '복귀'} 중 · ${m.name}`;
     }
@@ -490,6 +491,7 @@ export class Sim {
     this.clock += dm;
     if (this.clock >= DAY_MINUTES) { this.clock = DAY_MINUTES; this.ended = true; this.speed = 0; this.note('하루가 종료되었습니다. 오늘의 보고서를 제출하세요.', 'alert'); this.emit('dayend'); }
     for (const u of this.units) this.updateUnit(u, dt, dm);
+    this.tickGroups(dm);
     this.tickEvents(dm);
   }
 
@@ -505,8 +507,7 @@ export class Sim {
       if (!u.path.length) u.work.started = true;
       if (u.work.started) { const T = TASKS[u.work.kind]; u.work.remaining -= dm; this.snow = Math.max(0, this.snow - T.rate * dm); if (u.work.remaining <= 0) this.finishWork(u); }
     } else if (u.mode === 'mission' && u.phase === 'away') {
-      u.mission.remaining -= dm;
-      if (u.mission.remaining <= 0) this.finishMission(u);
+      if (!u.mission.gid) { u.mission.remaining -= dm; if (u.mission.remaining <= 0) this.finishMission(u); }   // 단체 임무는 tickGroups 가 처리
     } else if (u.mode === 'patrol' && u.patrol) {
       u.patrol.remaining -= dm; u.patrol.evAcc += dm;
       if (u.patrol.evAcc >= 45) { u.patrol.evAcc -= 45; this.patrolEvent(u); }
@@ -553,6 +554,7 @@ export class Sim {
   }
 
   finishMission(u) {
+    if (u.mission.gid) { this.finishGroup(u.mission.gid); return; }
     const m = MISSION[u.mission.id]; const p = this.chance(u, m); const r = this.rand();
     let result = 'fail', reward = 0, loss = 0;
     const mult = Math.max(0.1, (1 + u.fx.reward + u.cs.chm * 0.01) * this.incomeMult()), hurt = Math.max(0.2, 1 + u.fx.dmg);
@@ -566,6 +568,63 @@ export class Sim {
     // 정문으로 복귀
     u.phase = 'back'; u.away = false; u.place(GATE.x, GATE.y);
     const sp = this.spot(u.home); u.path = findPath(u.tx, u.ty, sp[0], sp[1]) || [];
+  }
+
+  /* ── 단체 임무 ── */
+  groupCheck(ids, mid) {
+    const m = GMISSION[mid]; if (!m) return { ok: false, reason: '없는 단체 임무' };
+    if (this.ended) return { ok: false, reason: '하루가 종료되었습니다. 보고서를 제출하세요.' };
+    if (!Array.isArray(ids) || new Set(ids).size !== ids.length) return { ok: false, reason: '인원 선택이 올바르지 않습니다.' };
+    if (ids.length < m.min) return { ok: false, reason: `최소 ${m.min}명이 필요합니다.` };
+    if (ids.length > m.max) return { ok: false, reason: `최대 ${m.max}명까지 보낼 수 있습니다.` };
+    for (const id of ids) {
+      const u = this.byId[id]; if (!u) return { ok: false, reason: '없는 인원입니다.' };
+      if (u.mode === 'mission') return { ok: false, reason: `${u.name} — 이미 임무 수행 중입니다.` };
+      if (this.isInjured(u)) return { ok: false, reason: `${u.name} — 부상이 심해 나설 수 없습니다. (HP 25 미만)` };
+    }
+    return { ok: true };
+  }
+  /** 단체 임무 성공률: 참가자 개인 성공률의 평균(부서 불일치 감점 없음) + 인원 시너지(최소 인원 초과 1명당 +2%, 최대 +6%) + 합동 보너스(2개 부서 이상 +2%) */
+  groupChance(ids, mid) {
+    const m = GMISSION[mid], us = ids.map((i) => this.byId[i]), night = this.clock >= DAY_PHASE_MIN;
+    const avg = us.reduce((a, u) => a + successChance(u, { ...m, dept: u.dept }, night, this.succBonus(u)), 0) / us.length;
+    const p = avg + 0.02 * Math.max(0, Math.min(3, us.length - m.min)) + (new Set(us.map((u) => u.dept)).size >= 2 ? 0.02 : 0);
+    return Math.max(0.05, Math.min(0.97, p));
+  }
+  groupReward(ids, mid) { const m = GMISSION[mid]; return Math.round(m.reward * (1 + 0.08 * Math.max(0, ids.length - m.min))); }
+  sendGroupMission(ids, mid) {
+    const c = this.groupCheck(ids, mid); if (!c.ok) return c;
+    const m = GMISSION[mid], paths = [];
+    for (const id of ids) { const u = this.byId[id], p = findPath(u.tx, u.ty, GATE.x, GATE.y); if (!p) return { ok: false, reason: `${u.name} — 정문까지의 길을 찾을 수 없습니다.` }; paths.push(p); }
+    const gid = `g${++this.gseq}`;
+    ids.forEach((id, i) => { const u = this.byId[id]; if (u.mode === 'patrol') u.patrol = null; if (u.mode === 'work') u.work = null; u.mode = 'mission'; u.phase = 'out'; u.path = paths[i]; u.mission = { id: m.id, remaining: m.dur, total: m.dur, gid }; });
+    this.groups[gid] = { gid, mid, ids: ids.slice(), remaining: m.dur, total: m.dur }; this.dayLog.orders++;
+    this.note(`단체 임무 출발: ${m.name} (${ids.length}명 — ${ids.map((i) => this.byId[i].name).join(', ')})`, 'order');
+    return { ok: true, gid };
+  }
+  tickGroups(dm) {
+    for (const g of Object.values(this.groups)) {
+      const us = g.ids.map((i) => this.byId[i]);
+      if (!us.every((u) => u.mode === 'mission' && u.phase === 'away')) continue;     // 전원이 임무 지역에 도착해야 시간이 흐른다
+      g.remaining -= dm; for (const u of us) u.mission.remaining = g.remaining;
+      if (g.remaining <= 0) this.finishGroup(g.gid);
+    }
+  }
+  finishGroup(gid) {
+    const g = this.groups[gid]; if (!g) return; delete this.groups[gid];
+    const m = GMISSION[g.mid], us = g.ids.map((i) => this.byId[i]), n = us.length, p = this.groupChance(g.ids, g.mid), r = this.rand();
+    const mult = Math.max(0.1, us.reduce((a, u) => a + 1 + u.fx.reward + u.cs.chm * 0.01, 0) / n * this.incomeMult());
+    let result = 'fail', reward = 0, worst = 0;
+    const hit = (base) => { for (const u of us) { const loss = Math.round(base(u) * Math.max(0.2, 1 + u.fx.dmg)); worst = Math.max(worst, loss); u.hp = Math.max(5, u.hp - loss); } };
+    if (r < p * 0.8) { result = 'success'; reward = Math.round(this.groupReward(g.ids, g.mid) * mult); for (const u of us) u.mor = Math.max(0, Math.min(100, u.mor + 5 + u.fx.mor)); this.rep += (m.risk > 0.4 ? 3 : 2); }
+    else if (r < p) { result = 'partial'; reward = Math.round(this.groupReward(g.ids, g.mid) * 0.5 * mult); hit(() => this.rand() * 10); for (const u of us) u.mor = Math.min(100, u.mor + 1); }
+    else { hit(() => 8 + this.rand() * 22 + m.risk * 20); for (const u of us) u.mor = Math.max(0, u.mor - 9); this.rep -= 2; }
+    this.funds += reward;
+    const lead = us[0];
+    this.dayLog.missions.push({ who: `${lead.name} 외 ${n - 1}명 (단체)`, id: m.id, dept: lead.dept, name: m.name, result, reward, loss: worst, clock: Math.floor(this.clock), group: true, members: us.map((u) => u.name) });
+    const label = { success: '성공', partial: '부분 성공', fail: '실패' }[result];
+    this.note(`단체 임무 ${label}: ${m.name}${reward ? ` (+${reward.toLocaleString('ko-KR')} CR)` : ''}${worst ? ` · 최대 부상 -${worst}` : ''}`, result === 'fail' ? 'bad' : 'good');
+    for (const u of us) { u.kit = false; u.phase = 'back'; u.away = false; u.place(GATE.x, GATE.y); const sp = this.spot(u.home); u.path = findPath(u.tx, u.ty, sp[0], sp[1]) || []; }
   }
 
   patrolEvent(u) {
@@ -622,6 +681,7 @@ export class Sim {
       u.mode = 'idle'; u.phase = null; u.mission = null; u.patrol = null; u.work = null; u.away = false; u.heard.clear();
       const s = this.spot(u.home); u.place(s[0], s[1]);
     }
+    this.groups = {};
     this.weather = { today: this.weather.next, next: rollWeather(this.rand) }; this.snow = dailySnow(this.snow, this.weather.today);
     this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
@@ -633,7 +693,7 @@ export class Sim {
   serialize() {
     const units = {};
     for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
@@ -669,10 +729,18 @@ export class Sim {
         u.kit = !!g.kit; u.warm = Number.isInteger(g.warm) ? g.warm : 0; u.aff = Math.max(0, Math.min(AFF_MAX, Math.floor(g.aff || 0))); u.talked = g.talked || 0; u.asked = g.asked || 0;
       }
       if (st.mode === 'work' && st.work && TASKS[st.work.kind] && Number.isFinite(st.work.remaining)) { u.mode = 'work'; u.work = { kind: st.work.kind, remaining: st.work.remaining, total: TASKS[st.work.kind].dur, started: true }; const tiles = st.work.kind === 'furnace' ? [FURNACE.spot] : yardWorkTiles(); const sp = tiles[Math.floor(this.rand() * tiles.length)]; u.place(sp[0], sp[1]); }
-      else if (st.mode === 'mission' && st.mission && st.phase !== 'back') { u.mode = 'mission'; u.phase = 'away'; u.mission = st.mission; u.away = true; }
+      else if (st.mode === 'mission' && st.mission && (MISSION[st.mission.id] || GMISSION[st.mission.id]) && st.phase !== 'back') { u.mode = 'mission'; u.phase = 'away'; u.mission = st.mission; u.away = true; }
       else if (st.mode === 'patrol' && st.patrol) { u.mode = 'patrol'; u.patrol = st.patrol; const wp = PATROLS[u.patrol.id][0]; u.place(wp[0], wp[1]); u.patrol.wi = 0; const p = findPath(u.tx, u.ty, PATROLS[u.patrol.id][1][0], PATROLS[u.patrol.id][1][1]); u.path = p || []; u.patrol.wi = 1; }
       else { u.mode = 'idle'; const sp = this.spot(u.home); u.place(sp[0], sp[1]); }
     }
+    // 단체 임무 복원: 구성원 전원이 같은 임무 중일 때만 유지, 아니면 해제
+    this.gseq = Math.max(0, Math.floor(s.gseq || 0)); this.groups = {};
+    for (const g of Array.isArray(s.groups) ? s.groups : []) {
+      const ok = g && typeof g.gid === 'string' && GMISSION[g.mid] && Array.isArray(g.ids) && g.ids.length >= GMISSION[g.mid].min && g.ids.length <= GMISSION[g.mid].max && Number.isFinite(g.remaining) &&
+        g.ids.every((i) => this.byId[i]?.mode === 'mission' && this.byId[i].mission?.gid === g.gid) && !this.groups[g.gid];
+      if (ok) this.groups[g.gid] = { gid: g.gid, mid: g.mid, ids: g.ids.slice(), remaining: Math.min(g.remaining, GMISSION[g.mid].dur), total: GMISSION[g.mid].dur };
+    }
+    for (const u of this.units) if (u.mode === 'mission' && u.mission?.gid && !this.groups[u.mission.gid]) { u.mode = 'idle'; u.phase = null; u.mission = null; u.away = false; const sp = this.spot(u.home); u.place(sp[0], sp[1]); }
     this.refresh();
   }
 }

@@ -13,7 +13,7 @@ import { WEATHERS, rollWeather, dailySnow, TASKS, START_SNOW } from '../src/game
 import { ITEMS, ITEM, STAT_ITEMS, EQUIPMENT, CONSUMABLES, FURNITURE, ROOM_KEYS, FURN_SLOTS, STAT_ITEM_CAP } from '../src/game/shop.js';
 import { LEADER_IDS, LEADER_TALK, REQUEST_COST } from '../src/game/leaders.js';
 import { SLOTS, FURNACE, yardWorkTiles, isOutdoor } from '../src/game/map.js';
-import { ROSTER, DEPTS, MISSIONS, MISSION, MONO } from '../src/game/data.js';
+import { ROSTER, DEPTS, MISSIONS, MISSION, MONO, GROUP_MISSIONS, GMISSION } from '../src/game/data.js';
 import { EVENTS, EVENT, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from '../src/game/events.js';
 
 Sim.EVENTS_ON = false;   // 기존 테스트는 무작위 사건 없이 진행(사건 테스트에서 따로 켠다)
@@ -389,5 +389,42 @@ await t('부서 재집결: 부서 인원 전원을 부서 방으로, 임무·부
   assert.equal(s3.regroup('nope').ok, false); const s4 = new Sim(null, () => 0.5); s4.ended = true; assert.equal(s4.regroup('rager').ok, false);
   // 모든 부서에서 동작
   const s5 = new Sim(null, () => 0.5); for (const d of DEPTS) assert.equal(s5.regroup(d.key).moved.length, ROSTER.filter((x) => x.dept === d.key).length, d.key);
+});
+await t('단체 임무: 데이터·인원 검증(3~6명, 부상·임무 중 제외), 성공률 시너지', () => {
+  assert.equal(GROUP_MISSIONS.length, 4); assert.ok(GROUP_MISSIONS.every((m) => m.min === 3 && m.max === 6 && ['cmb', 'def', 'mob', 'med', 'int'].includes(m.stat) && m.dur <= 360 && m.reward > 10000));
+  const s = new Sim(null, () => 0.5), ids = (...n) => n.map((i) => 'c' + String(i).padStart(2, '0'));
+  assert.equal(s.groupCheck(ids(4, 5), 'gm1').ok, false, '2명은 부족'); assert.equal(s.groupCheck(ids(4, 5, 6, 7, 8, 9, 10), 'gm1').ok, false, '7명은 초과'); assert.equal(s.groupCheck(ids(4, 4, 5), 'gm1').ok, false, '중복');
+  assert.equal(s.groupCheck(ids(4, 5, 6), 'zz').ok, false); assert.equal(s.groupCheck(['c04', 'c05', 'nope'], 'gm1').ok, false); assert.ok(s.groupCheck(ids(4, 5, 6), 'gm1').ok);
+  s.byId.c06.hp = 10; assert.match(s.groupCheck(ids(4, 5, 6), 'gm1').reason, /부상/); s.byId.c06.hp = 100;
+  s.sendMission('c05', 'rg1'); assert.match(s.groupCheck(ids(4, 5, 6), 'gm1').reason, /이미 임무/);
+  const e = new Sim(null, () => 0.5); e.ended = true; assert.equal(e.groupCheck(ids(4, 5, 6), 'gm1').ok, false);
+  // 성공률: 인원이 늘수록, 여러 부서가 섞일수록 높다
+  const q = new Sim(null, () => 0.5), same = ['c04', 'c05', 'c06'], more = ['c04', 'c05', 'c06', 'c25'], p3 = q.groupChance(same, 'gm1'), p4same = q.groupChance(['c04', 'c05', 'c06', 'c04'].slice(0, 3), 'gm1');
+  assert.ok(q.groupChance(['c04', 'c05', 'c06', 'c07'], 'gm1') > p3, '4명 > 3명(같은 조건 가정)'); assert.ok(q.groupChance(['c04', 'c05', 'c07'], 'gm1') > q.groupChance(['c04', 'c05', 'c06'], 'gm1') - 0.2, '합동 보너스');
+  for (const m of GROUP_MISSIONS) for (const grp of [same, more]) { const p = q.groupChance(grp, m.id); assert.ok(p >= 0.05 && p <= 0.97); }
+  assert.ok(q.groupReward(['c04', 'c05', 'c06', 'c07', 'c08'], 'gm1') > q.groupReward(same, 'gm1'), '인원이 많으면 총 보상 증가');
+});
+await t('단체 임무: 전원 도착 후 시간 흐름, 한 번의 판정으로 전원 정산, 보상·기록·복귀', () => {
+  const s = new Sim(null, () => 0), ids = ['c04', 'c05', 'c06', 'c07']; const f0 = s.funds, mor0 = ids.map((i) => s.byId[i].mor);
+  const r = s.sendGroupMission(ids, 'gm1'); assert.ok(r.ok); assert.ok(ids.every((i) => s.byId[i].mode === 'mission' && s.byId[i].mission.gid === r.gid)); assert.equal(s.dayLog.orders, 1);
+  s.setSpeed(1); const rem0 = s.groups[r.gid].remaining; s.update(0.1); assert.equal(s.groups[r.gid].remaining, rem0, '전원이 나가기 전에는 시간이 흐르지 않음');
+  s.advance(60); assert.ok(s.groups[r.gid] && s.groups[r.gid].remaining < rem0, '전원 도착 후 감소'); assert.match(s.statusText(s.byId.c04), /임무 수행 중 · 거점 합동 소탕 작전/);
+  s.advance(200); assert.equal(Object.keys(s.groups).length, 0, '정산 후 그룹 삭제');
+  assert.equal(s.dayLog.missions.length, 1, '개인 4건이 아니라 단체 1건'); const m = s.dayLog.missions[0]; assert.equal(m.result, 'success'); assert.equal(m.group, true); assert.equal(m.members.length, 4); assert.ok(m.who.includes('외 3명'));
+  assert.ok(s.funds >= f0 + s.groupReward(ids, 'gm1') * 0.5, '보상 지급'); assert.ok(ids.every((i, k) => s.byId[i].mor >= mor0[k] + 4), '사기 상승');
+  s.advance(60); assert.ok(ids.every((i) => s.byId[i].mode === 'idle'), '복귀 후 대기'); assert.equal(s.buildReport(true).income, m.reward, '보고서 수입에 포함');
+  // 실패: 전원이 부상
+  const x = new Sim(null, () => 0.999); x.sendGroupMission(ids, 'gm1'); x.setSpeed(2); x.advance(400); const xm = x.dayLog.missions[0]; assert.equal(xm.result, 'fail'); assert.equal(xm.reward, 0); assert.ok(ids.every((i) => x.byId[i].hp < 100), '전원 부상'); assert.ok(x.rep < 0);
+  // 하루 마감 정산: 임무 도중 보고서 제출해도 1건만 기록되고 모두 대기
+  const y = new Sim(null, () => 0); y.sendGroupMission(ids, 'gm3'); y.setSpeed(2); y.advance(30); const rep = y.buildReport(false); assert.equal(rep.missions.length, 1); assert.ok(ids.every((i) => y.byId[i].mode === 'idle' && !y.byId[i].mission)); y.nextDay(rep); assert.deepEqual(y.groups, {});
+});
+await t('단체 임무: 저장/복원(진행 중 유지), 손상된 저장은 안전하게 해제', () => {
+  const ids = ['c10', 'c13', 'c16']; const s = new Sim(null, () => 0); s.sendGroupMission(ids, 'gm4'); s.setSpeed(2); s.advance(15);
+  const snap = JSON.parse(JSON.stringify(s.serialize())); assert.equal(snap.groups.length, 1);
+  const r = new Sim(snap, () => 0); const g = Object.values(r.groups)[0]; assert.ok(g && g.ids.length === 3 && g.remaining > 0); r.setSpeed(2); r.advance(300); assert.equal(Object.keys(r.groups).length, 0); assert.equal(r.dayLog.missions.filter((m) => m.group).length, 1); assert.ok(ids.every((i) => r.byId[i].mode !== 'mission' || r.byId[i].phase === 'back'));
+  const bad = JSON.parse(JSON.stringify(snap)); bad.groups = [{ gid: bad.groups[0].gid, mid: 'nope', ids, remaining: 10 }]; const b = new Sim(bad, () => 0.5); assert.ok(ids.every((i) => b.byId[i].mode === 'idle' && !b.byId[i].mission), '알 수 없는 임무 → 해제');
+  const bad2 = JSON.parse(JSON.stringify(snap)); bad2.groups = []; assert.ok(ids.every((i) => new Sim(bad2, () => 0.5).byId[i].mode === 'idle'), '그룹 정보가 없으면 해제');
+  const bad3 = JSON.parse(JSON.stringify(snap)); bad3.groups[0].ids = ['c10', 'c13']; assert.ok(ids.every((i) => new Sim(bad3, () => 0.5).byId[i].mode === 'idle'), '인원 수 불일치 → 해제');
+  const old = JSON.parse(JSON.stringify(snap)); delete old.groups; delete old.gseq; assert.ok(new Sim(old, () => 0.5)); const bad4 = JSON.parse(JSON.stringify(snap)); bad4.units.c10.mission.id = 'zzz'; assert.equal(new Sim(bad4, () => 0.5).byId.c10.mode, 'idle', '모르는 임무 id');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
