@@ -1,5 +1,6 @@
 // 무기 12종. fx 는 능력치/전투 보정, parts 는 [dx, dy, w, h, 색] (손 위치 기준, 위쪽이 -dy) — 스프라이트에 그려진다.
 import { buildWorkshopWeapons } from './workshop.js';
+import { gunPixels, GUN_PALETTES } from './weapon-art.js';
 const K1 = '#2c3036', M2 = '#59616b', M3 = '#8b95a1', BK = '#15171a', OL = '#4a5a3a', BR = '#c9a24a', RD = '#a5382a', GL = '#7fb0e8', WD = '#6a4a2a';   // 총기 색
 const S = '#c8d0d8', D = '#7e8892', H = '#eef3f7', W = '#8a6a3c', G = '#c9a24a', L = '#3a2a1c';
 export const WEAPONS = [
@@ -19,22 +20,22 @@ export const WEAPONS = [
     [-3, -3, 7, 1, '#3a3c42'], [-3, -4, 1, 1, '#2a2c31'], [3, -4, 1, 1, '#2a2c31'], [-2, -2, 1, 1, '#2a2c31'], [2, -2, 1, 1, '#2a2c31'], [0, -3, 1, 1, '#9fd8e6'],
     [0, -2, 1, 4, '#26272b'], [0, 2, 1, 1, '#9fd8e6']] },
   { id: 'battleaxe', name: '배틀엑스', desc: '양날 전투 도끼. 공격적이지만 허술하다.', fx: { str: 3, def: -1 }, parts: [[0, -12, 1, 15, W], [-3, -13, 3, 4, S], [1, -13, 3, 4, S], [0, -13, 1, 2, D]] },
-  // ── 총기 6종: 기술 중심. fx.upkeep 은 탄약비(일일 유지비). 습격 전투에서는 원거리로 싸운다(gun 항목). 도트는 총구를 위로 든 모습.
+  // ── 총기 6종: 기술 중심. fx.upkeep 은 탄약비(일일 유지비). 습격 전투에서는 원거리로 싸운다(gun 항목). 도트는 옆모습(총구가 앞쪽)으로 gunPixels 로 만든다.
   { id: 'pistol', name: '권총', desc: '가볍고 빠른 반자동 권총. 탄약비가 조금 든다.', fx: { skl: 1, speed: 0.05, upkeep: 40 }, gun: { range: 4, cd: 0.9, mul: 0.8 },
-    parts: [[0, -6, 1, 1, K1], [0, -5, 2, 5, M2], [0, -5, 1, 4, M3], [0, -1, 2, 1, K1], [0, 0, 2, 3, WD]] },
+    art: { kind: 'gun', px: gunPixels({ body: 3, bh: 2, bar: 2, bt: 1, gp: 1, top: 'iron' }) }, pal: GUN_PALETTES.gun },
   { id: 'smg', name: '기관단총', desc: '짧은 사거리에서 탄을 쏟아붓는다. 기술과 기동에 유리하고 탄약비가 든다.', fx: { skl: 2, speed: 0.03, upkeep: 100 }, gun: { range: 4.5, cd: 0.45, mul: 0.4 },
-    parts: [[0, -11, 1, 1, M3], [0, -10, 1, 5, K1], [-1, -5, 3, 4, M2], [0, -5, 1, 3, M3], [-1, -1, 3, 1, K1], [1, 0, 1, 3, BK], [-1, 0, 1, 3, WD]] },
+    art: { kind: 'gun', px: gunPixels({ stock: 'fold', sl: 3, body: 4, bh: 2, bar: 3, bt: 1, gp: 2, mag: 'long', mp: 2, top: 'dot' }) }, pal: GUN_PALETTES.gun },
   { id: 'mg', name: '기관총', desc: '묵직한 연사 화력. 이동이 느려지고 탄약비가 크다.', fx: { str: 2, skl: 1, speed: -0.12, upkeep: 220 }, gun: { range: 6.5, cd: 0.35, mul: 0.3 },
-    parts: [[0, -14, 1, 5, K1], [-1, -9, 3, 5, M2], [0, -8, 1, 1, K1], [0, -6, 1, 1, K1], [-2, -8, 1, 3, K1], [2, -8, 1, 3, K1], [-1, -4, 3, 4, M2], [2, -4, 2, 3, OL], [2, -1, 1, 2, BR], [-1, 0, 1, 2, WD]] },
+    art: { kind: 'gun', px: gunPixels({ stock: 'full', sl: 3, body: 5, bh: 3, bar: 3, bt: 1, hg: 2, gp: 2, mag: 'belt', mp: 2, top: 'carry', bipod: 1, fins: 1 }) }, pal: GUN_PALETTES.gun },
   { id: 'sniper', name: '저격총', desc: '멀리서 한 발에 큰 피해를 준다. 정밀하지만 연사가 느리고 탄약비가 든다.', fx: { skl: 3, wis: 1, speed: -0.05, succ: 0.02, upkeep: 160 }, gun: { range: 9, cd: 2.4, mul: 1.7 },
-    parts: [[-1, -15, 3, 1, M2], [0, -15, 1, 8, K1], [0, -7, 2, 5, M2], [-1, -9, 1, 4, BK], [-1, -9, 1, 1, GL], [2, -5, 1, 1, M3], [0, -2, 2, 5, WD]] },
+    art: { kind: 'gun', px: gunPixels({ stock: 'full', sl: 4, body: 4, bh: 2, bar: 6, bt: 1, mz: 'brake', gp: 2, mag: 'box', mp: 2, top: 'bigscope', bipod: 1 }) }, pal: GUN_PALETTES.gun },
   { id: 'rocket', name: '로켓 런처', desc: '폭발탄을 쏘아 주변까지 피해를 준다. 느리고 탄약비가 크다.', fx: { str: 2, skl: 1, speed: -0.1, upkeep: 280 }, gun: { range: 7, cd: 2.6, mul: 0.95, splash: 1.6 },
-    parts: [[0, -14, 1, 2, RD], [-2, -12, 5, 1, K1], [-1, -11, 3, 8, OL], [-1, -11, 1, 8, M3], [2, -9, 1, 2, K1], [-2, -3, 5, 1, K1], [0, -2, 1, 4, BK]] },
+    art: { kind: 'gun', px: gunPixels({ tube: { len: 11, th: 3, flare: 'both', head: 'rocket', pad: 1, sight: 1, grip: 2 } }) }, pal: GUN_PALETTES.gun },
   { id: 'mortar', name: '박격포', desc: '먼 거리에서 포탄을 떨어뜨려 넓은 범위에 피해를 준다. 매우 느리고 탄약비가 크다.', fx: { skl: 1, wis: 2, speed: -0.18, upkeep: 300 }, gun: { range: 10, cd: 3.2, mul: 0.95, splash: 2 },
-    parts: [[0, -14, 1, 2, BR], [-1, -12, 3, 9, K1], [-1, -12, 1, 9, M2], [-2, -6, 5, 1, M2], [-3, -5, 1, 5, K1], [3, -5, 1, 5, K1], [-3, 1, 7, 2, M2]] },
+    art: { kind: 'gun', px: gunPixels({ tube: { len: 7, th: 3, flare: 'rear', head: 'shell', plate: 1, bipod: 1, grip: 0 } }) }, pal: GUN_PALETTES.gun },
 ];
 
-/* 공방 무기 60개(마그마 · 아크 · 웨폰&아머 × 12종류 × 5개)는 workshop.js 에 있다. 도트는 무기마다 따로 설계된다. */
+/* 공방 무기 90개(마그마 · 아크 · 웨폰&아머 × 18종류 × 5개)는 workshop.js 에 있다. 도트는 무기마다 따로 설계된다. */
 export { WORKSHOPS, WORKSHOP } from './workshop.js';
 export const WORKSHOP_WEAPONS = buildWorkshopWeapons(WEAPONS);
 export const WEAPON = Object.fromEntries([...WEAPONS, ...WORKSHOP_WEAPONS].map((w) => [w.id, w]));
@@ -62,6 +63,11 @@ function drawArt(r, view, w) {
   const c = (role) => w.pal[role] || '#ff00ff', a = w.art;
   if (a.kind === 'shield') { const [x, bottom] = view === 'down' ? [0, 17] : view === 'up' ? [5, 16] : [9, 17], y = bottom - a.h + 1; for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }   // 바닥선을 맞추고 크기는 무기마다 다르다
   if (a.kind === 'gauntlet') { const cx = a.w >> 1, hands = view === 'side' ? [8 - cx] : [3 - cx, 12 - cx], y = 18 - a.h; for (const x of hands) for (const [px, py, role] of a.px) r(c(role), x + px, y + py, 1, 1); return; }
+  if (a.kind === 'gun') {   // 옆모습 총: 앞/옆 모습에서는 총구가 오른쪽, 뒷모습에서는 왼쪽(좌우 반전)
+    const [hx, hy, dir] = view === 'down' ? [12, 15, 1] : view === 'up' ? [3, 15, -1] : [10, 15, 1];
+    for (const [gx, gy, role] of a.px) r(c(role), hx + dir * gx, hy + gy, 1, 1);
+    return;
+  }
   const [cx, hy] = view === 'down' ? [13, 16] : view === 'up' ? [3, 16] : [11, 16];
   for (const [dx, dy, wd, ht, role] of a.rects) r(c(role), cx + dx, hy + dy, wd, ht);
 }
@@ -75,6 +81,7 @@ export function weaponIcon(id0) {
     const col = (role) => w.pal[role] || '#ff00ff', a = w.art;
     if (a.kind === 'shield') { const ox = Math.floor((16 - a.w * 2) / 2), oy = Math.floor((20 - a.h * 2) / 2); for (const [px, py, role] of a.px) fill(col(role), ox + px * 2, oy + py * 2, 2, 2); }
     else if (a.kind === 'gauntlet') { const ox = Math.floor((16 - a.w * 3) / 2), oy = Math.floor((20 - a.h * 3) / 2); for (const [px, py, role] of a.px) fill(col(role), ox + px * 3, oy + py * 3, 3, 3); }
+    else if (a.kind === 'gun') { const xs = a.px.map((q) => q[0]), ys = a.px.map((q) => q[1]), ox = Math.floor((16 - (Math.max(...xs) - Math.min(...xs) + 1)) / 2) - Math.min(...xs), oy = Math.floor((20 - (Math.max(...ys) - Math.min(...ys) + 1)) / 2) - Math.min(...ys); for (const [gx, gy, role] of a.px) fill(col(role), ox + gx, oy + gy, 1, 1); }
     else for (const [dx, dy, wd, ht, role] of a.rects) fill(col(role), 8 + dx, 16 + dy, wd, ht);
   } else if (id === 'shield') { fill('#241c14', 3, 3, 10, 13); fill('#4a6a8c', 4, 4, 8, 11); fill(G, 7, 6, 2, 7); fill('#8fb0d0', 4, 4, 8, 1); }
   else if (id === 'gauntlet') { fill(D, 4, 6, 8, 9); fill(S, 4, 6, 8, 2); fill(H, 4, 6, 2, 2); fill('#4a525a', 4, 12, 8, 3); fill(D, 3, 14, 10, 2); }

@@ -429,17 +429,17 @@ await t('단체 임무: 저장/복원(진행 중 유지), 손상된 저장은 �
   const bad3 = JSON.parse(JSON.stringify(snap)); bad3.groups[0].ids = ['c10', 'c13']; assert.ok(ids.every((i) => new Sim(bad3, () => 0.5).byId[i].mode === 'idle'), '인원 수 불일치 → 해제');
   const old = JSON.parse(JSON.stringify(snap)); delete old.groups; delete old.gseq; assert.ok(new Sim(old, () => 0.5)); const bad4 = JSON.parse(JSON.stringify(snap)); bad4.units.c10.mission.id = 'zzz'; assert.equal(new Sim(bad4, () => 0.5).byId.c10.mode, 'idle', '모르는 임무 id');
 });
-await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개(공방별 20개), 티어 표기 없음, 무기마다 모양이 모두 다르다', () => {
+await t('공방 무기: 3개 공방 × 18종류(근접 12 + 총기 6) × 5개 = 90개(공방별 30개), 티어 표기 없음, 무기마다 모양이 모두 다르다', () => {
   assert.deepEqual(WORKSHOPS.map((w) => w.name), ['마그마 인더스트리 공방', '아크 공방', '웨폰 & 아머 디벨롭 인더스트리 공방']);
-  assert.equal(WORKSHOP_WEAPONS.length, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.id)).size, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.name)).size, 60, '이름 고유');
+  assert.equal(WORKSHOP_WEAPONS.length, 90); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.id)).size, 90); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.name)).size, 90, '이름 고유');
   assert.ok(WORKSHOP_WEAPONS.every((w) => !('tier' in w) && !/Mk\./.test(w.name + w.desc)), '티어/Mk 표기 없음');
-  for (const wk of WORKSHOPS) assert.equal(WORKSHOP_WEAPONS.filter((w) => w.workshop === wk.id).length, 20, wk.id);
-  const types = WEAPONS.filter((w) => w.id !== 'frostblade' && !w.gun); assert.equal(types.length, 12, '공방 종류는 근접 12종(서리 대검·총기 제외)');
+  for (const wk of WORKSHOPS) assert.equal(WORKSHOP_WEAPONS.filter((w) => w.workshop === wk.id).length, 30, wk.id);
+  const types = WEAPONS.filter((w) => w.id !== 'frostblade'); assert.equal(types.length, 18, '공방 종류는 서리 대검을 뺀 18종(근접 12 + 총기 6)');
   for (const ty of types) {
     const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); assert.equal(set.length, 5, ty.id); assert.ok(new Set(set.map((w) => w.workshop)).size >= 2, '한 종류의 5개는 여러 공방에 걸쳐 있다');
     const by = set.slice().sort((a, b) => a.pw - b.pw); for (let i = 1; i < 5; i++) assert.ok(by[i].pw >= by[i - 1].pw && by[i].fee >= by[i - 1].fee && by[i].upkeep >= by[i - 1].upkeep, `${ty.id} 강한 무기일수록 비용이 높다`);
   }
-  assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade' || WEAPON[w.base]?.gun), '서리 대검·총기는 공방 종류가 아님');
+  assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade'), '서리 대검은 공방 종류가 아님');
   for (const w of WORKSHOP_WEAPONS) { assert.ok(w.fee >= 2000 && w.upkeep >= 100 && w.name && w.desc && WEAPON[w.id] === w && w.pw >= 1 && w.pw <= 5); assert.ok(Object.values(w.fx).every((v) => typeof v === 'boolean' || Number.isFinite(v))); }
   // 공방 성향: 마그마=근력·한파 무시, 아크=기술·안개 무시·순찰 안전, 웨폰&아머=방어·부상 경감
   const top = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 5), low = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 1);
@@ -447,7 +447,7 @@ await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개(공방별 20개)
   // 모양: 기본 13종 + 공방 60종의 윤곽(색 무시)이 모두 다르고, 같은 종류 안에서는 6픽셀 이상 다르며, 어느 방향에서도 셀 밖으로 나가지 않는다
   const mask = (id, view = 'down') => { const cells = new Set(); drawWeapon((c, x, y, ww, hh) => { assert.ok(/^#[0-9a-f]{6}$/.test(c), id + ' 색 형식'); for (let i = 0; i < ww; i++) for (let j = 0; j < hh; j++) cells.add(`${x + i},${y + j}`); }, view, id); return cells; };
   const all = [...WEAPONS, ...WORKSHOP_WEAPONS], sig = all.map((w) => [...mask(w.id)].sort().join(';')); assert.equal(new Set(sig).size, all.length, '모든 무기의 윤곽이 다르다');
-  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const m = mask(w.id, view); assert.ok(m.size > 0, w.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x < 32 && y >= 0 && y < 24, `${w.name} ${view} 범위 밖 ${c}`); } }
+  for (const w of WORKSHOP_WEAPONS) for (const view of ['down', 'up', 'side']) { const m = mask(w.id, view); assert.ok(m.size > 0, w.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= -8 && x < 24 && y >= 0 && y < 24, `${w.name} ${view} 범위 밖 ${c}`); } }
   for (const ty of types) { const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); for (let i = 0; i < set.length; i++) for (let j = i + 1; j < set.length; j++) { const a = mask(set[i].id), b = mask(set[j].id); let d = 0; for (const c of a) if (!b.has(c)) d++; for (const c of b) if (!a.has(c)) d++; assert.ok(d >= 6, `${set[i].name} / ${set[j].name} 윤곽 차이 ${d}px`); } }
   // 공방별 색 계열이 서로 다르다
   const cols = (id) => { const s = new Set(); drawWeapon((c) => s.add(c), 'down', id); return [...s].join(); }; assert.notEqual(cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'magma').id), cols(WORKSHOP_WEAPONS.find((w) => w.workshop === 'arc').id));
@@ -601,7 +601,7 @@ await t('용병 고용: 후보 풀·면접·고용·급여·상한·계약 해�
 });
 await t('총기 6종: 권총·기관단총·기관총·저격총·로켓 런처·박격포 — 모양이 모두 다르고, 탄약비(유지비)·성능이 반영되며 습격에서 원거리/범위 공격', () => {
   const GUNS = ['pistol', 'smg', 'mg', 'sniper', 'rocket', 'mortar']; assert.deepEqual(WEAPONS.filter((w) => w.gun).map((w) => w.id), GUNS); assert.deepEqual(GUNS.map((g) => WEAPON[g].name), ['권총', '기관단총', '기관총', '저격총', '로켓 런처', '박격포']);
-  for (const g of GUNS) { const w = WEAPON[g]; assert.ok(w.fx.upkeep > 0, g + ' 탄약비'); assert.ok(w.gun.range > 1.6 && w.gun.cd > 0 && w.gun.mul > 0, g + ' 전투 성능'); assert.ok(w.fx.skl >= 1 || w.fx.str >= 2, g + ' 능력치'); assert.ok(!w.workshop && !w.art); }
+  for (const g of GUNS) { const w = WEAPON[g]; assert.ok(w.fx.upkeep > 0, g + ' 탄약비'); assert.ok(w.gun.range > 1.6 && w.gun.cd > 0 && w.gun.mul > 0, g + ' 전투 성능'); assert.ok(w.fx.skl >= 1 || w.fx.str >= 2, g + ' 능력치'); assert.ok(!w.workshop && w.art && w.art.kind === 'gun' && w.art.px.length > 6, g + ' 옆모습 도트'); const xs = w.art.px.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 16, g + ' 길이 16칸 이내'); }
   assert.ok(WEAPON.mortar.gun.range > WEAPON.sniper.gun.range && WEAPON.sniper.gun.range > WEAPON.mg.gun.range && WEAPON.mg.gun.range > WEAPON.smg.gun.range && WEAPON.smg.gun.range > WEAPON.pistol.gun.range, '사거리 순서');
   assert.ok(WEAPON.rocket.gun.splash > 0 && WEAPON.mortar.gun.splash > 0 && !WEAPON.sniper.gun.splash, '범위 피해는 로켓·박격포'); assert.ok(WEAPON.sniper.gun.mul > WEAPON.rocket.gun.mul * 0.9 && WEAPON.sniper.gun.cd > WEAPON.mg.gun.cd, '저격은 한 발이 세고 느리다');
   // 운영비: 착용하면 탄약비만큼 유지비가 늘어난다
@@ -618,5 +618,18 @@ await t('총기 6종: 권총·기관단총·기관총·저격총·로켓 런처�
   // 균형: 전원이 총기를 들어도 근접 전원과 비슷한 수준(극단적으로 강하거나 약하지 않다)
   const seq = (seed) => { let a = seed; return () => { a = (a * 16807) % 2147483647; return a / 2147483647; }; }; const fight = (id) => { const x = new Sim(null, () => 0.5); for (const u of x.units) x.setWeapon(u.id, id); const all = x.units.slice(0, 15).map(defenderFrom); let w = 0; for (let i = 1; i <= 20; i++) if (new RaidBattle({ defenders: all, plan: planRaid(10, seq(i)), day: 10, seed: i }).finish().win) w++; return w; };
   const base0 = fight('battleaxe'); for (const g of GUNS) { const w = fight(g); assert.ok(w >= base0 - 12 && w <= 20, `${g} 승리 ${w}/20 (근접 ${base0}/20)`); }
+});
+await t('공방 총기 30종: 종류마다 5개, 사거리·범위 피해 상속, 탄약비+공방 유지비, 습격에서 원거리로 싸우고 기본 총기와도 모양이 다르다', () => {
+  const GUNS = ['pistol', 'smg', 'mg', 'sniper', 'rocket', 'mortar'], gw = WORKSHOP_WEAPONS.filter((w) => GUNS.includes(w.base)); assert.equal(gw.length, 30);
+  for (const g of GUNS) { const set = gw.filter((w) => w.base === g); assert.equal(set.length, 5, g); assert.deepEqual(set.map((w) => w.pw).sort(), [1, 2, 3, 4, 5], g + ' 강도 1~5가 한 번씩'); assert.ok(new Set(set.map((w) => w.workshop)).size >= 2); for (const w of set) { assert.deepEqual(w.gun, WEAPON[g].gun, '사거리·연사·범위는 기본 총기와 같다'); assert.equal(w.art.kind, 'gun'); assert.ok(w.fx.upkeep > 0, '탄약비(기본 총기 효과)'); assert.ok(w.upkeep >= 100, '공방 유지비'); } }
+  for (const wk of WORKSHOPS) assert.equal(gw.filter((w) => w.workshop === wk.id).length, 10, wk.id + ' 총기 10개');
+  const mask = (id) => { const c = new Set(); drawWeapon((col, x, y, ww, hh) => { for (let i = 0; i < ww; i++) for (let j = 0; j < hh; j++) c.add(`${x + i},${y + j}`); }, 'down', id); return c; }, diff = (a, b) => { let d = 0; for (const c of a) if (!b.has(c)) d++; for (const c of b) if (!a.has(c)) d++; return d; };
+  for (const g of GUNS) for (const w of gw.filter((x) => x.base === g)) assert.ok(diff(mask(w.id), mask(g)) >= 6, `${w.name} 은(는) 기본 ${WEAPON[g].name} 과 모양이 달라야 한다`);
+  // 장비·비용: 공방 총기를 착용하면 착용비 + (탄약비 + 공방 유지비)
+  const s = new Sim(null, () => 0.5); s.funds = 1e6; const w = gw.find((x) => x.name === '플라즈마 레일건'), up0 = s.buildReport(true).upkeep, f0 = s.funds; assert.ok(s.equipWorkshop('c04', w.id).ok); assert.equal(s.funds, f0 - w.fee); assert.equal(s.buildReport(true).upkeep - up0, w.upkeep + w.fx.upkeep, '공방 유지비 + 탄약비');
+  const d = defenderFrom(s.byId.c04); assert.equal(d.range, w.gun.range); assert.equal(d.atkCd, w.gun.cd); assert.equal(d.atkMul, w.gun.mul);
+  const sx = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(sx.byId.c04.weapon, w.id, '저장/복원');
+  // 총기 색은 공방마다 다르다
+  const cols = (id) => { const c = new Set(); drawWeapon((col) => c.add(col), 'down', id); return [...c].join(); }; assert.notEqual(cols(gw.find((x) => x.workshop === 'magma').id), cols(gw.find((x) => x.workshop === 'arc').id));
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

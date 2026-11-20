@@ -78,3 +78,81 @@ export const PALETTES = {
   arc: { B: '#b9c9d8', D: '#6f8499', H: '#eaf6ff', K: '#3a4656', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#3a5a78', L: '#1f2c3a' },
   wad: { B: '#9aa4af', D: '#5f6a76', H: '#dfe5eb', K: '#3d454e', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5e6b78', L: '#2a323a' },
 };
+
+/** 총기(옆모습, 총구가 오른쪽): 개머리판·몸체·핸드가드·총열·총구·손잡이·탄창·조준경·양각대·발광 장식을 조합한다.
+    반환 좌표는 손잡이(손) 기준: +x 총구 방향, +y 아래. 전체 길이는 16칸 이내. tube 가 있으면 로켓/박격포 같은 발사관형. */
+export function gunPixels(s) {
+  const o = { stock: 'none', sl: 3, body: 5, bh: 3, bar: 4, bt: 1, hg: 0, mz: 'none', grip: 'pistol', gp: 2, fore: 0, mag: 'none', mp: 1, top: 'iron', bipod: 0, glow: '', fins: 0, tube: null, ...s };
+  const px = new Map(), put = (x, y, c) => px.set(`${x},${y}`, [x, y, c]), hl = (x, y, n, c) => { for (let i = 0; i < n; i++) put(x + i, y, c); }, vl = (x, y, n, c) => { for (let i = 0; i < n; i++) put(x, y + i, c); };
+  let ax, ay;   // 손(손잡이) 위치
+  if (o.tube) {
+    const T = { len: 10, th: 3, flare: 'both', head: 'none', plate: 0, bipod: 0, grip: 2, pad: 0, sight: 0, ...o.tube }, x0 = T.pad ? 2 : 0, th = T.th;
+    for (let i = 0; i < T.len; i++) for (let y = 0; y < th; y++) put(x0 + i, y, y === 0 ? 'H' : y === th - 1 ? 'D' : 'O');
+    const ring = (x) => { put(x, -1, 'K'); put(x, th, 'K'); for (let y = 0; y < th; y++) put(x, y, 'K'); };
+    if (T.flare === 'both' || T.flare === 'rear') ring(x0); if (T.flare === 'both') ring(x0 + T.len - 1);
+    if (T.pad) { vl(0, -1, th + 3, 'K'); vl(1, 0, th + 1, 'W'); }
+    const xe = x0 + T.len;
+    if (T.head === 'rocket') { vl(xe, 0, th, 'R'); vl(xe + 1, 1, th - 2 > 0 ? th - 2 : 1, 'R'); put(xe + 2, Math.floor(th / 2), 'T'); }
+    if (T.head === 'shell') { vl(xe, 1, th - 1, 'T'); put(xe + 1, 1 + Math.floor((th - 1) / 2), 'T'); }
+    const gx = x0 + Math.floor(T.len / 2) + 1; ax = gx; ay = th + 1;
+    if (T.grip) { vl(gx, th, T.grip + 1, 'W'); put(gx + 1, th, 'K'); }
+    if (T.sight) { put(x0 + Math.floor(T.len / 2), -1, 'K'); put(x0 + Math.floor(T.len / 2), -2, 'G'); }
+    if (T.plate) { vl(0, -1, th + 4, 'D'); vl(1, -1, th + 4, 'K'); put(0, th + 3, 'K'); }
+    if (T.bipod) { const bx = xe - 3; put(bx, th + 1, 'K'); put(bx - 1, th + 2, 'K'); put(bx - 2, th + 3, 'K'); put(bx + 2, th + 1, 'K'); put(bx + 3, th + 2, 'K'); put(bx + 4, th + 3, 'K'); }
+    if (o.glow === 'cells') for (let i = 2; i < T.len - 1; i += 2) put(x0 + i, 1, 'E');
+    if (o.glow === 'line') for (let i = 1; i < T.len - 1; i++) put(x0 + i, 1, 'E');
+  } else {
+    const xs = o.stock === 'none' ? 0 : o.sl, bh = o.bh, bt = o.bt;
+    // 개머리판
+    if (o.stock === 'full') { for (let i = 0; i < o.sl; i++) vl(i, 0, bh, 'W'); vl(0, -1 + 0, bh + 1, 'K'); }
+    else if (o.stock === 'skel') { hl(0, 0, o.sl, 'K'); hl(0, bh, o.sl, 'K'); vl(0, 0, bh + 1, 'K'); }
+    else if (o.stock === 'fold') hl(0, 1, o.sl, 'K');
+    else if (o.stock === 'bulk') { for (let i = 0; i < o.sl; i++) vl(i, 0, bh + 1, i % 2 ? 'K' : 'D'); put(0, 0, 'T'); }
+    else if (o.stock === 'pad') { vl(xs - 1, -0, bh + 1, 'K'); }
+    // 몸체
+    for (let i = 0; i < o.body; i++) for (let y = 0; y < bh; y++) put(xs + i, y, y === 0 ? 'H' : y === bh - 1 ? 'D' : 'B');
+    if (bh >= 2) put(xs + 1, 1, 'L');
+    // 핸드가드 → 총열 → 총구
+    let x = xs + o.body;
+    for (let i = 0; i < o.hg; i++) for (let y = 0; y <= bt; y++) put(x + i, y, y === 0 ? (i % 2 ? 'H' : 'D') : 'B'); x += o.hg;
+    for (let i = 0; i < o.bar; i++) { for (let y = 0; y < bt; y++) put(x + i, y, y === 0 ? 'H' : 'K'); if (o.fins && i % 2 === 0 && i > 0) { put(x + i, -1, 'D'); put(x + i, bt, 'D'); } } x += o.bar;
+    if (o.mz === 'brake') { vl(x, -1, bt + 2, 'D'); vl(x + 1, -1, bt + 2, 'K'); x += 2; }
+    else if (o.mz === 'supp') { for (let i = 0; i < 3; i++) for (let y = 0; y <= bt + 1; y++) put(x + i, y - (bt > 1 ? 0 : 0), y === 0 ? 'H' : 'K'); x += 3; }
+    else if (o.mz === 'flash') { put(x, -1, 'K'); put(x, bt, 'K'); put(x, 0, 'D'); x += 1; }
+    else if (o.mz === 'cone') { vl(x, 0, bt, 'D'); vl(x + 1, -1, bt + 2, 'K'); x += 2; }
+    const xend = x;
+    // 손잡이 · 앞손잡이
+    const gx = xs + o.gp; ax = gx; ay = bh + 1;
+    if (o.grip === 'pistol') { vl(gx, bh, 3, 'W'); put(gx + 1, bh, 'K'); put(gx + 1, bh + 1, 'L'); }
+    if (o.fore && o.hg) vl(xs + o.body + 1, bt + 1, o.fore, 'W');
+    // 탄창
+    const mx = xs + o.mp;
+    if (o.mag === 'box') { vl(mx, bh, 3, 'K'); vl(mx + 1, bh, 3, 'D'); }
+    else if (o.mag === 'long') { vl(mx, bh, 4, 'K'); vl(mx + 1, bh, 4, 'D'); }
+    else if (o.mag === 'curve') { vl(mx, bh, 2, 'K'); vl(mx + 1, bh, 2, 'D'); vl(mx + 1, bh + 2, 2, 'K'); vl(mx + 2, bh + 2, 2, 'D'); }
+    else if (o.mag === 'drum') { hl(mx, bh, 3, 'D'); hl(mx - 1, bh + 1, 5, 'K'); put(mx + 1, bh + 1, 'T'); hl(mx, bh + 2, 3, 'D'); }
+    else if (o.mag === 'belt') { hl(mx, bh, 3, 'O'); hl(mx, bh + 1, 3, 'K'); put(mx + 3, bh + 1, 'T'); put(mx + 3, bh + 2, 'T'); put(mx + 2, bh + 3, 'T'); }
+    // 조준기
+    if (o.top === 'iron') { put(xend - 1, -1, 'K'); put(xs + 1, -1, 'K'); }
+    else if (o.top === 'dot') { hl(xs + 1, -1, 2, 'K'); put(xs + 2, -1, 'E'); }
+    else if (o.top === 'scope') { hl(xs, -1, o.body + 1, 'K'); put(xs + o.body, -1, 'G'); put(xs, -1, 'G'); }
+    else if (o.top === 'bigscope') { hl(xs, -2, o.body + 2, 'K'); hl(xs + 1, -1, o.body, 'D'); put(xs + o.body + 1, -2, 'G'); put(xs, -2, 'G'); }
+    else if (o.top === 'carry') { put(xs + 1, -1, 'K'); put(xs + o.body - 2, -1, 'K'); hl(xs + 1, -2, o.body - 2, 'K'); }
+    else if (o.top === 'rail') for (let i = 0; i < o.body; i += 2) put(xs + i, -1, 'D');
+    // 양각대
+    if (o.bipod) { const bx = xend - 3; put(bx, bt + 1, 'K'); put(bx - 1, bt + 2, 'K'); put(bx + 1, bt + 1, 'K'); put(bx + 2, bt + 2, 'K'); }
+    // 발광 장식
+    if (o.glow === 'cells') for (let i = 1; i < o.body - 1; i += 2) put(xs + i, Math.min(1, bh - 1), 'E');
+    if (o.glow === 'line') for (let i = 0; i < o.bar; i++) if (i % 2 === 0) put(xs + o.body + o.hg + i, 0, 'E');
+    if (o.glow === 'core') { put(xs + o.body - 1, Math.min(1, bh - 1), 'F'); put(xs + o.body - 2, Math.min(1, bh - 1), 'E'); put(xend - 1, 0, 'E'); }
+  }
+  return [...px.values()].map(([x, y, c]) => [x - ax, y - ay, c]);
+}
+
+/** 총기 도트는 공방/종류별로 색 역할 → 색 팔레트를 쓴다 */
+export const GUN_PALETTES = {
+  gun: { B: '#59616b', D: '#3a3f46', H: '#8b95a1', K: '#1c1f24', T: '#c9a24a', E: '#7fb0e8', F: '#cfe6ff', W: '#6a4a2a', L: '#0e1013', R: '#a5382a', O: '#4a5a3a', G: '#7fb0e8' },
+  magma: { B: '#6a5558', D: '#2e2326', H: '#b09294', K: '#17100f', T: '#c0502a', E: '#ff7a2a', F: '#ffd27a', W: '#5a3626', L: '#0b0606', R: '#a5382a', O: '#5a3a2a', G: '#ff9b3a' },
+  arc: { B: '#a9b9c9', D: '#5f748a', H: '#e6f4ff', K: '#2b3644', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#33506a', L: '#12181f', R: '#b46bff', O: '#3a5a78', G: '#b46bff' },
+  wad: { B: '#8f98a3', D: '#555f6b', H: '#d9dfe6', K: '#2e353d', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5a4a38', L: '#16191d', R: '#a5382a', O: '#56604a', G: '#7fc8ff' },
+};
