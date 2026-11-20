@@ -102,7 +102,7 @@ function render(cv, view, c0, cA) {
       if (p.t > 0.86) lv -= 1;                                                  // 끝
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (lay(x + dx, y + dy) > p.layer) { lv -= 1; break; }   // 위 가닥에 눌린 경계
     }
-    if (p.gap) lv = 0;                                                            // 가닥 사이 어두운 틈
+    if (p.gap) lv = Math.min(lv, 1);                                              // 가닥 사이 틈(한 단계만 어둡게 — 바코드처럼 튀지 않게)
     lv = Math.max(0, Math.min(4, lv));
     let off = LV[lv] * (lv >= 3 ? hi : lo); const base = p.acc ? cA : c0;
     if (edge) off = -92 * lo - (cv.has(x, y + 1) ? 0 : 8);                      // 윤곽
