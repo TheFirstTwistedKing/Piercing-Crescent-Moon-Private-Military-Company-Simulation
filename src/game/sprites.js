@@ -65,12 +65,12 @@ function bodyPalette(L, accent) {
   };
 }
 function drawBody(D, frameData, L, accent) {
-  const pal = bodyPalette(L, accent), { rows, ox, oy } = frameData;
+  const pal = bodyPalette(L, accent), { rows, ox, oy, legRow } = frameData;
   rows.forEach((row, y) => {
     let x = 0; while (x < row.length) {
       const ch = row[x]; if (ch === '.') { x++; continue; }
       let e = x; while (e + 1 < row.length && row[e + 1] === ch) e++;
-      const legs = y >= 30, col = legs ? (ch === 'C' ? pal.c : ch === 'I' || ch === 'K' ? '#aaaaaa' : ch === 'G' ? '#555555' : ch === 'H' ? '#2a2a2a' : pal[ch]) : pal[ch];   // 다리 구역의 회색은 다리감개(템플릿 고정색)
+      const legs = y >= legRow, col = legs ? (ch === 'C' ? pal.c : ch === 'I' || ch === 'K' ? '#aaaaaa' : ch === 'G' ? '#555555' : ch === 'H' ? '#2a2a2a' : pal[ch]) : pal[ch];   // 다리 구역의 회색은 다리감개(템플릿 고정색)
       D(col || '#ff00ff', ox + x, oy + y, e - x + 1, 1); x = e + 1;
     }
   });
@@ -83,7 +83,7 @@ function drawInner(c, wc, dir, frame, L, accent, weapon, wings, rec) {
   const view = dir === 'down' ? 'down' : dir === 'up' ? 'up' : 'side', mirror = dir === 'left';
   for (const g of [c, wc]) { g.save(); if (mirror) { g.translate(16, 0); g.scale(-1, 1); } }
   if (wings && view !== 'up') drawWings(r, view, frame);
-  const fd = bodyFrame(view === 'side' ? 'right' : view, frame);
+  const fd = bodyFrame(dir === 'left' ? 'left' : view === 'side' ? 'right' : view, frame);
   drawBody(D, fd, L, accent);
   if (wings && view === 'up') drawWings(r, 'up', frame);
   drawHair(r, view, L.hairStyle, L.hair, L.hair2, { x0: fd.ox + fd.head.x0, x1: fd.ox + fd.head.x1, top: fd.oy + fd.head.y0 });
