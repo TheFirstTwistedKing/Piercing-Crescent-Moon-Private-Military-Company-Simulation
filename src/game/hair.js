@@ -8,37 +8,13 @@ export function adj(hex, d) {
 }
 
 export const HAIR_STYLES = [
-  { id: 'm1', g: 'm', name: '크롭', k: 'cap', rows: 2, side: 0 },
-  { id: 'm2', g: 'm', name: '스포츠', k: 'cap', rows: 2, side: 2 },
-  { id: 'm3', g: 'm', name: '가르마', k: 'cap', rows: 2, side: 1, part: true },
-  { id: 'm4', g: 'm', name: '투블럭', k: 'cap', rows: 3, side: 0, top: true },
-  { id: 'm5', g: 'm', name: '스파이크', k: 'spike' },
-  { id: 'm6', g: 'm', name: '모히칸', k: 'mohawk' },
-  { id: 'm8', g: 'm', name: '꽁지머리', k: 'pony', rows: 2, side: 1 },
-  { id: 'm9', g: 'm', name: '삭발', k: 'bald' },
-  { id: 'f1', g: 'f', name: '단발', k: 'cap', rows: 3, side: 4, back: 4, bangs: true },
-  { id: 'f3', g: 'f', name: '포니테일', k: 'pony', rows: 2, side: 1, long: true },
-  { id: 'f5', g: 'f', name: '똥머리', k: 'bun', rows: 2, side: 1 },
-  { id: 'f7', g: 'f', name: '숏컷', k: 'cap', rows: 3, side: 1, bangs: true },
-  { id: 'f9', g: 'f', name: '사이드 포니', k: 'sidepony', rows: 2, side: 1 },
-  // ── 확장 스타일: v2 설계(top 정수리 · lift 볼륨 · fr 앞머리 · sl 옆머리 길이 · bk 뒷머리 길이 · jag 들쭉날쭉한 끝 · flare 바깥으로 퍼짐 · tail 묶음/땋기) ──
-  { id: 'm11', g: 'm', name: '올백', v2: { top: 'slick', lift: 1, sl: 1, bk: 2 } },
-  { id: 'm12', g: 'm', name: '댄디컷', v2: { top: 'part', fr: 'side', sl: 2 } },
-  { id: 'm13', g: 'm', name: '리젠트', v2: { top: 'quiff', lift: 3 } },
-  { id: 'm14', g: 'm', name: '울프컷', v2: { top: 'flat', fr: 'straight', sl: 4, bk: 5, jag: 1 } },
-  { id: 'm16', g: 'm', name: '맨번', v2: { top: 'slick', tail: { t: 'tbun' } } },
-  { id: 'm17', g: 'm', name: '버즈컷', v2: { top: 'buzz' } },
-  { id: 'm18', g: 'm', name: '포마드', v2: { top: 'pomp', lift: 2, sl: 1 } },
-  { id: 'm19', g: 'm', name: '콤마 헤어', v2: { top: 'flat', fr: 'comma', sl: 3, bk: 2 } },
-  { id: 'm23', g: 'm', name: '텍스처 크롭', v2: { top: 'crest' } },
-  { id: 'm24', g: 'm', name: '쌍뿔', v2: { top: 'tufts' } },
-  { id: 'f12', g: 'f', name: '허쉬컷', v2: { top: 'flat', fr: 'straight', sl: 5, bk: 6, jag: 1 } },
-  { id: 'f13', g: 'f', name: '픽시컷', v2: { top: 'crest', fr: 'side' } },
-  { id: 'f18', g: 'f', name: '사이드 브레이드', v2: { top: 'part', fr: 'side', tail: { t: 'sbraid', n: 9 } } },
+  { id: 'w1', g: 'x', rough: 1.25, name: '은 브릿지 숏', accent: (c) => adj(c, 120) },
+  { id: 'w2', g: 'x', rough: 1.2, name: '애쉬 플립 숏', accent: (c) => mixHex(c, '#4f9ea3', 0.7) },
+  { id: 'w3', g: 'x', rough: 1.3, name: '헝클어진 숏 + 꼬리', accent: (c) => adj(c, 40) },
+  { id: 'w4', g: 'x', rough: 0.7, name: '투톤 웨이브 롱', accent: (c) => adj(c, -150) },
+  { id: 'w5', g: 'x', rough: 0.6, name: '스트레이트 롱', accent: (c) => adj(c, -40) },
 ];
-// 헤어 템플릿 시트(첨부 이미지)에서 추출한 도안 스타일 23종(너무 큰 머리는 뺌) — 남녀 공용(g:'x'). A: 시트 2(8) · B/C: 시트 1(8+8) · D: 시트 4(6)
-for (const id of ['a5', 'a8', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6']) HAIR_STYLES.push({ id, g: 'x', name: `템플릿 ${id.toUpperCase()}`, sheet: id });
-HAIR_STYLES.push({ id: 'e1', g: 'x', name: '은발 원본', sheet: 'e1', anchored: true });   // 사진 1 은발 캐릭터의 머리(방향·걸음마다 원본 도안)
+const mixHex = (a, b, t) => { const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
 export const HAIR = Object.fromEntries(HAIR_STYLES.map((s) => [s.id, s]));
 
 // 자연색 + 염색색 견본
@@ -48,5 +24,5 @@ export const HAIR_COLORS = ['#1c1a1f', '#3a2418', '#6b4a2b', '#8a5a34', '#c9a063
 /** 머리카락 그리기(2배 해상도 생성기 hair3.js): r(color, x, y, w, h) 는 논리 칸 좌표 — 내부에서 반 칸(실제 1픽셀) 단위로 나눠 호출한다.
     view: 'down' | 'up' | 'side'(오른쪽 보기; 왼쪽은 호출측에서 좌우반전). tip 이 있으면 뿌리→끝 그라데이션. */
 export function drawHair(r, view, id, col, tip = null, box = null) {
-  drawHair3((c, x, y, w, h) => r(c, x / 2, y / 2, w / 2, h / 2), view, HAIR[id] || HAIR.m1, col, tip, box);
+  drawHair3((c, x, y, w, h) => r(c, x / 2, y / 2, w / 2, h / 2), view, HAIR[id] || HAIR.w1, col, tip, box);
 }

@@ -19,7 +19,7 @@ const preview = (u, opts, w, hh, scale = 1) => { const cv = Object.assign(docume
 
 export function mountCustom(root, ctx, arg) {
   const sim = engine.sim;
-  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'name', wtab = 'base', gtab = sim.byId[id].gender, otab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
+  let id = arg && sim.byId[arg] ? arg : sim.units[0].id, tab = 'name', wtab = 'base', otab = sim.byId[id].gender, dir = 'down', walk = false, frame = 0, reveal = null, busy = false, saveT = 0;
   const U = () => sim.byId[id];
   const scheduleSave = () => { clearTimeout(saveT); saveT = setTimeout(() => engine.save(), 1500); };
 
@@ -27,7 +27,7 @@ export function mountCustom(root, ctx, arg) {
   const list = h('aside', { class: 'cu-list', 'aria-label': '인원 선택' });
   const sel = h('select', { class: 'cu-select', 'aria-label': '인원 선택', onchange: (e) => pick(e.target.value) });
   const paintList = () => { sel.replaceChildren(...sim.units.map((u) => h('option', { value: u.id }, `${u.name} · ${u.latin}`))); sel.value = id; list.replaceChildren(...DEPTS.map((d) => h('section', {}, h('h5', {}, h('i', { class: 'dot', style: `background:${d.color}` }), d.en), ...sim.units.filter((u) => u.dept === d.key).map((u) => h('button', { type: 'button', class: `ru ${u.id === id ? 'on' : ''}`, onclick: () => pick(u.id) }, h('b', {}, u.name, h('em', { class: 'lat' }, u.latin)), h('small', {}, u.role)))))); };
-  const pick = (nid) => { id = nid; gtab = U().gender; otab = U().gender; reveal = null; Audio.sfx('select'); paintAll(); };
+  const pick = (nid) => { id = nid; otab = U().gender; reveal = null; Audio.sfx('select'); paintAll(); };
 
   /* ── 중앙: 미리보기 ── */
   const cv = Object.assign(document.createElement('canvas'), { width: SW, height: SH, className: 'px stage-cv', 'aria-label': '캐릭터 미리보기' });
@@ -66,8 +66,7 @@ export function mountCustom(root, ctx, arg) {
 
   const lookTab = () => {
     const u = U(), cur = u.look.hairStyle;
-    const seg = h('div', { class: 'seg' }, ...[['m', `남성 ${HAIR_STYLES.filter((x) => x.g === 'm').length}`], ['f', `여성 ${HAIR_STYLES.filter((x) => x.g === 'f').length}`], ['x', `템플릿 ${HAIR_STYLES.filter((x) => x.g === 'x').length}`]].map(([g, l]) => h('button', { type: 'button', class: `seg-b ${gtab === g ? 'on' : ''}`, onclick: () => { gtab = g; Audio.sfx('click'); paintPanel(); } }, l)));
-    const grid = h('div', { class: 'grid hs-grid' }, ...HAIR_STYLES.filter((s) => s.g === gtab).map((s) => h('button', { type: 'button', class: `card hs ${cur === s.id ? 'on' : ''}`, 'aria-pressed': String(cur === s.id), onclick: () => { sim.setHair(id, s.id, u.look.hair); Audio.sfx('select'); changed(); } }, preview(u, { hairStyle: s.id, dir: 'down', weapon: null }, 16, 12, 6), h('small', {}, s.name))));
+    const grid = h('div', { class: 'grid hs-grid' }, ...HAIR_STYLES.map((s) => h('button', { type: 'button', class: `card hs ${cur === s.id ? 'on' : ''}`, 'aria-pressed': String(cur === s.id), onclick: () => { sim.setHair(id, s.id, u.look.hair); Audio.sfx('select'); changed(); } }, preview(u, { hairStyle: s.id, dir: 'down', weapon: null }, 16, 12, 6), h('small', {}, s.name))));
     const color = h('input', { type: 'color', value: u.look.hair, 'aria-label': '머리색 직접 선택', oninput: (e) => { sim.setHair(id, u.look.hairStyle, e.target.value); scheduleSave(); paintStage(); } });
     color.addEventListener('change', () => paintPanel());
     const sw = h('div', { class: 'swatches' }, ...HAIR_COLORS.map((c) => h('button', { type: 'button', class: `sw ${u.look.hair.toLowerCase() === c ? 'on' : ''}`, style: `background:${c}`, 'aria-label': `머리색 ${c}`, onclick: () => { sim.setHair(id, u.look.hairStyle, c); Audio.sfx('click'); changed(); } })), color);
@@ -79,7 +78,7 @@ export function mountCustom(root, ctx, arg) {
     const ocur = u.look.outfit || '', oseg = h('div', { class: 'seg' }, ...[['m', '남성 복장'], ['f', '여성 복장']].map(([g, l]) => h('button', { type: 'button', class: `seg-b ${otab === g ? 'on' : ''}`, onclick: () => { otab = g; Audio.sfx('click'); paintPanel(); } }, l)));
     const ogrid = h('div', { class: 'grid hs-grid' }, h('button', { type: 'button', class: `card hs ${ocur ? '' : 'on'}`, 'aria-pressed': String(!ocur), onclick: () => { sim.setOutfit(id, null); Audio.sfx('select'); changed(); } }, preview(u, { outfit: null, dir: 'down', weapon: null }, 16, 24, 4), h('small', {}, '기본 복장')),
       ...OUTFITS.filter((o) => o.g === otab).map((o) => h('button', { type: 'button', class: `card hs ${ocur === o.id ? 'on' : ''}`, 'aria-pressed': String(ocur === o.id), onclick: () => { sim.setOutfit(id, o.id); Audio.sfx('select'); changed(); } }, preview(u, { outfit: o.id, dir: 'down', weapon: null }, 16, 24, 4), h('small', {}, o.name.replace(/ \((남|여)\)$/, '')))));
-    return h('div', {}, h('p', { class: 'f-label' }, '복장'), oseg, ogrid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
+    return h('div', {}, h('p', { class: 'f-label' }, '복장'), oseg, ogrid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 스타일'), grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
   };
 
   const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 48, height: 40, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '72px'; n.style.height = '60px'; return n; };

@@ -47,7 +47,7 @@ export const ROSTER = [
 
 // 성별 · 기본 머리 스타일 · 기본 무기 (커스터마이징으로 변경 가능)
 const FEMALE = new Set(['c01', 'c05', 'c08', 'c10', 'c12', 'c13', 'c17', 'c19', 'c21', 'c23']);
-const HAIR0 = { c01: 'f1', c02: 'm3', c03: 'm1', c04: 'm2', c05: 'f3', c06: 'm9', c07: 'm4', c08: 'f12', c09: 'm1', c10: 'f7', c11: 'm8', c12: 'f9', c13: 'f5', c14: 'm3', c15: 'm5', c16: 'm11', c17: 'f13', c18: 'm2', c19: 'f18', c20: 'm6', c21: 'f7', c22: 'm4', c23: 'f5', c24: 'm17', c25: 'm3' };
+const HAIR0 = { c01: 'w4', c02: 'w1', c03: 'w2', c04: 'w3', c05: 'w5', c06: 'w1', c07: 'w2', c08: 'w4', c09: 'w1', c10: 'w2', c11: 'w3', c12: 'w3', c13: 'w5', c14: 'w5', c15: 'w1', c16: 'w2', c17: 'w2', c18: 'w3', c19: 'w4', c20: 'w1', c21: 'w5', c22: 'w2', c23: 'w3', c24: 'w3', c25: 'w1' };
 const WEAPON0 = { c01: 'rapier', c02: 'dagger', c03: 'shortsword', c04: 'battleaxe', c05: 'hammer', c06: 'gauntlet', c07: 'shield', c08: 'longsword', c09: 'spear', c10: 'shortsword', c11: 'dagger', c12: 'shortsword', c13: 'dagger', c14: 'dagger', c15: 'shortsword', c16: 'dagger', c17: 'rapier', c18: 'handaxe', c19: 'spear', c20: 'spear', c21: 'rapier', c22: 'hammer', c23: 'handaxe', c24: 'greathammer', c25: 'frostblade' };
 // 기본 복장(참고 자료 15벌: 남 15 · 여 10 — 임시 배정, 커스터마이즈에서 바꿀 수 있다)
 const OUTFIT_M = ['o1', 'o2', 'o3', 'o4', 'o5a', 'o5b', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11', 'o12', 'o13', 'o14'], OUTFIT_F = ['o1', 'o2', 'o3', 'o5a', 'o6', 'o8', 'o9', 'o10', 'o13', 'o14'];

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""복원 시트(art/sprites)에서 게임용 몸 프레임(src/game/body-frames.js)과 은발 원본 머리카락 도안(src/game/hair-silver.js)을 만든다.
+"""복원 시트(art/sprites)에서 게임용 몸 프레임(src/game/body-frames.js)을 만든다.
  - 몸(목 아래)  = 은발 걷기 시트(silver_walk_4x3.png, scripts/restore-silver-walk.py 산출) — 보폭 · 팔 흔들림 · 소매/등 표식 · 다리감개가 원본 그대로.
  - 머리(대머리 + 눈) = 맨몸 시트(photo1_base_walk_4x3.png). 은발 시트의 얼굴 피부에 겹치도록 위치를 맞춰 붙인다. 머리카락은 게임이 따로 얹는다.
- - 은발 머리카락 = 은발 시트 머리에서 회색/흰 칸만 따로 떼어 낸 도안(스타일 e1). 컷마다 위치(hair)가 다르므로 프레임에 함께 저장한다.
 행: 정면·후면·왼쪽 보기·오른쪽 보기, 열: 첫 보폭·중앙·반대쪽 보폭. 사용: python3 scripts/build-body-frames.py"""
 import numpy as np
 from PIL import Image
@@ -90,9 +89,4 @@ for name, seq in frames.items():
     out += "  ],\n"
 out += "};\n"
 open('src/game/body-frames.js', 'w').write(out)
-hs = "// 은발 원본 머리카락(스타일 e1) 도안 — scripts/build-body-frames.py 가 은발 걷기 시트에서 떼어 낸 데이터(직접 고치지 말 것).\n// 글자: . 투명 · 0 외곽선 · 1 어두움 · 2 기본 · 3 밝음 · 4 광택. 위치는 body-frames.js 의 프레임별 hair 좌표. side = 오른쪽 보기, sideL = 왼쪽 보기를 좌우반전해 둔 도안.\nexport const SILVER_HAIR = {\n"
-for view, key in (('down', 'down'), ('up', 'up'), ('right', 'side'), ('left', 'sideL')):
-    hs += f"  {key}: [\n" + "".join(f"    '{r}',\n" for r in hair[view]) + "  ],\n"
-hs += "};\n"
-open('src/game/hair-silver.js', 'w').write(hs)
 print('done')

@@ -39,7 +39,7 @@ export function makeCandidates({ seed, day = 1, dept = 'rager', count, taken = {
     let name, g = 0; do { name = pick(rng, SURNAME) + pick(rng, gender === 'm' ? GIVEN_M : GIVEN_F); } while (names.has(name) && g++ < 60); names.add(name);
     let latin, g2 = 0; do { latin = pick(rng, LATIN); } while (latins.has(latin) && g2++ < 60); latins.add(latin);
     const cmb = ri(rng, G.cmb), st = { cmb }; for (const k of ['def', 'mob', 'med', 'int']) st[k] = clamp(cmb + ri(rng, cfg.stat[k].map((x) => x)) + ri(rng, [-4, 4]), 15, 99);
-    const styles = HAIR_STYLES.filter((s) => s.g === gender), look = { skin: pick(rng, SKINS), hair: pick(rng, HAIRC), hairStyle: pick(rng, styles).id, hat: pick(rng, ['none', 'none', 'helm', 'goggles', 'cap']), extra: pick(rng, ['none', 'none', 'vest', 'scarf', 'mask']), pants: pick(rng, ['#222222', '#1f1d1d', '#201f1f']) };
+    const styles = HAIR_STYLES, look = { skin: pick(rng, SKINS), hair: pick(rng, HAIRC), hairStyle: pick(rng, styles).id, hat: pick(rng, ['none', 'none', 'helm', 'goggles', 'cap']), extra: pick(rng, ['none', 'none', 'vest', 'scarf', 'mask']), pants: pick(rng, ['#222222', '#1f1d1d', '#201f1f']) };
     [look.coat, look.coat2] = pick(rng, cfg.coats);
     { const pool = OUTFITS.filter((o) => o.g === gender); let hsh = 0; for (const ch of name + latin) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0; look.outfit = pool[hsh % pool.length].id; }   // 이름으로 정하는 복장(난수 소비 없음)
     const heavy = grade === 'elite' ? cfg.weapons.filter((w) => HEAVY.has(w)) : cfg.weapons; const weapon = pick(rng, rng() < 0.5 ? heavy : cfg.weapons);
