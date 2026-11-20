@@ -49,7 +49,10 @@ export const ROSTER = [
 const FEMALE = new Set(['c01', 'c05', 'c08', 'c10', 'c12', 'c13', 'c17', 'c19', 'c21', 'c23']);
 const HAIR0 = { c01: 'f1', c02: 'm3', c03: 'm1', c04: 'm2', c05: 'f3', c06: 'm9', c07: 'm4', c08: 'f2', c09: 'm1', c10: 'f7', c11: 'm8', c12: 'f9', c13: 'f5', c14: 'm3', c15: 'm5', c16: 'm7', c17: 'f4', c18: 'm2', c19: 'f6', c20: 'm6', c21: 'f10', c22: 'm4', c23: 'f8', c24: 'm10', c25: 'm3' };
 const WEAPON0 = { c01: 'rapier', c02: 'dagger', c03: 'shortsword', c04: 'battleaxe', c05: 'hammer', c06: 'gauntlet', c07: 'shield', c08: 'longsword', c09: 'spear', c10: 'shortsword', c11: 'dagger', c12: 'shortsword', c13: 'dagger', c14: 'dagger', c15: 'shortsword', c16: 'dagger', c17: 'rapier', c18: 'handaxe', c19: 'spear', c20: 'spear', c21: 'rapier', c22: 'hammer', c23: 'handaxe', c24: 'greathammer', c25: 'frostblade' };
-for (const r of ROSTER) { r.gender = FEMALE.has(r.id) ? 'f' : 'm'; r.look.hairStyle = HAIR0[r.id]; r.weapon = WEAPON0[r.id]; }
+// 기본 복장(참고 자료 15벌: 남 15 · 여 10 — 임시 배정, 커스터마이즈에서 바꿀 수 있다)
+const OUTFIT_M = ['o1', 'o2', 'o3', 'o4', 'o5a', 'o5b', 'o6', 'o7', 'o8', 'o9', 'o10', 'o11', 'o12', 'o13', 'o14'], OUTFIT_F = ['o1', 'o2', 'o3', 'o5a', 'o6', 'o8', 'o9', 'o10', 'o13', 'o14'];
+let om = 0, of = 0;
+for (const r of ROSTER) { r.gender = FEMALE.has(r.id) ? 'f' : 'm'; r.look.hairStyle = HAIR0[r.id]; r.weapon = WEAPON0[r.id]; r.look.outfit = r.gender === 'f' ? OUTFIT_F[of++ % OUTFIT_F.length] + 'f' : OUTFIT_M[om++ % OUTFIT_M.length] + 'm'; }
 
 // 라틴어 코드네임 — 각자의 역할을 뜻하는 라틴어 단어(예: 총괄 지휘관 = Imperatrix, 방패 = Murus)
 const LATIN = {

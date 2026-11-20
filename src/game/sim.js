@@ -7,6 +7,7 @@ import { LEADER_IDS, LEADER_SET, LEADER_TALK, AFF_MAX, REQUEST_COST } from './le
 import { WEAPON } from './weapons.js';
 import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
 import { HAIR } from './hair.js';
+import { OUTFIT } from './outfits.js';
 import { RECRUIT, INTERVIEW_COST, REROLL_COST, MAX_REROLLS, makeCandidates, cleanDef, candidateView } from './recruit.js';
 import { RaidBattle, planRaid, defenderFrom, RAID_CHANCE, FORMATIONS, ENEMY_TYPES } from './raid.js';
 import { EVENTS, EVENT, EV_CHANCE, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from './events.js';
@@ -415,6 +416,11 @@ export class Sim {
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { ok: false, reason: '색 형식 오류' };
     u.look.hairStyle = style; u.look.hair = color.toLowerCase(); this.dirty = true; this.emit('custom'); return { ok: true };
   }
+  /** 복장: OUTFIT id(성별은 상관없이 고를 수 있다) 또는 null(기본 복장) */
+  setOutfit(id, outfit) {
+    const u = this.byId[id]; if (outfit !== null && !OUTFIT[outfit]) return { ok: false, reason: '없는 복장' };
+    if (outfit) u.look.outfit = outfit; else delete u.look.outfit; this.dirty = true; this.emit('custom'); return { ok: true };
+  }
   /** 머리 끝색(그라데이션). null 이면 단색. */
   setHairTip(id, tip) {
     const u = this.byId[id]; if (tip !== null && !/^#[0-9a-fA-F]{6}$/.test(tip)) return { ok: false, reason: '색 형식 오류' };
@@ -815,7 +821,7 @@ export class Sim {
   /* ── 저장/복원 ── */
   serialize() {
     const units = {};
-    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
+    for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, of: u.look.outfit || null, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
     return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, recruits: this.recruits.map((d) => ({ ...d, hired: d.hired })), rseq: this.rseq, rec: { day: this.rec.day, base: this.rec.base, rerolls: this.rec.rerolls, n: this.rec.n, cands: this.rec.cands }, raid: { pending: this.raid.pending, today: this.raid.today, acc: Math.round(this.raid.acc) }, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
@@ -853,7 +859,7 @@ export class Sim {
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
       if (st.c) {
         const c = st.c; if (typeof c.nm === 'string' && typeof c.ln === 'string' && !this.nameProblem(u.id, c.nm.trim(), c.ln.trim())) { u.name = c.nm.trim(); u.latin = c.ln.trim(); }
-        if (HAIR[c.hs]) u.look.hairStyle = c.hs; if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if ('h2' in c) u.look.hair2 = /^#[0-9a-f]{6}$/i.test(c.h2 || '') ? c.h2.toLowerCase() : null; if (WEAPON[c.w]) u.weapon = c.w;
+        if (HAIR[c.hs]) u.look.hairStyle = c.hs; if ('of' in c) { if (OUTFIT[c.of]) u.look.outfit = c.of; else delete u.look.outfit; } if (/^#[0-9a-f]{6}$/i.test(c.hc || '')) u.look.hair = c.hc; if ('h2' in c) u.look.hair2 = /^#[0-9a-f]{6}$/i.test(c.h2 || '') ? c.h2.toLowerCase() : null; if (WEAPON[c.w]) u.weapon = c.w;
         if (Number.isInteger(c.pool) && c.pool >= 40 && c.pool <= 50) u.pool = c.pool;
         u.traits = (c.traits || []).filter((t, i, a) => TRAIT[t] && a.indexOf(t) === i); u.used = Math.max(c.used || 0, u.traits.length);
         u.eq = (c.eq || []).filter((t) => u.traits.includes(t)).slice(0, MAX_TRAITS); u.ab = (c.ab || []).filter((a) => this.research.abilities.includes(a)).slice(0, MAX_ABILITIES);

@@ -3,6 +3,7 @@
 import { TRAITS, TRAIT } from './traits.js';
 import { HAIR_STYLES, HAIR } from './hair.js';
 import { WEAPONS } from './weapons.js';
+import { OUTFITS, OUTFIT } from './outfits.js';
 import { mulberry } from './raid.js';
 
 export const RECRUIT = {
@@ -40,6 +41,7 @@ export function makeCandidates({ seed, day = 1, dept = 'rager', count, taken = {
     const cmb = ri(rng, G.cmb), st = { cmb }; for (const k of ['def', 'mob', 'med', 'int']) st[k] = clamp(cmb + ri(rng, cfg.stat[k].map((x) => x)) + ri(rng, [-4, 4]), 15, 99);
     const styles = HAIR_STYLES.filter((s) => s.g === gender), look = { skin: pick(rng, SKINS), hair: pick(rng, HAIRC), hairStyle: pick(rng, styles).id, hat: pick(rng, ['none', 'none', 'helm', 'goggles', 'cap']), extra: pick(rng, ['none', 'none', 'vest', 'scarf', 'mask']), pants: pick(rng, ['#222222', '#1f1d1d', '#201f1f']) };
     [look.coat, look.coat2] = pick(rng, cfg.coats);
+    { const pool = OUTFITS.filter((o) => o.g === gender); let hsh = 0; for (const ch of name + latin) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0; look.outfit = pool[hsh % pool.length].id; }   // 이름으로 정하는 복장(난수 소비 없음)
     const heavy = grade === 'elite' ? cfg.weapons.filter((w) => HEAVY.has(w)) : cfg.weapons; const weapon = pick(rng, rng() < 0.5 ? heavy : cfg.weapons);
     const q = rng(), pool = TRAITS.filter((t) => t.rarity !== 'l'), good = pool.filter((t) => !t.bad), bad = pool.filter((t) => t.bad), trait = q < 0.45 ? pick(rng, good).id : q < 0.6 && bad.length ? pick(rng, bad).id : null;
     const fee = Math.round(ri(rng, G.fee) / 100) * 100, wage = Math.round(ri(rng, G.wage) / 10) * 10;
@@ -59,7 +61,7 @@ export function cleanDef(d, withId = true) {
   const weapon = WEAPONS.some((w) => w.id === d.weapon && w.id !== 'frostblade') ? d.weapon : null; if (!weapon) return null;
   const st = {}; for (const k of ['cmb', 'def', 'mob', 'med', 'int']) { const v = Number(d.stats?.[k]); if (!Number.isFinite(v)) return null; st[k] = clamp(Math.round(v), 10, 100); }
   return { id: String(d.id), name: nm, latin: lt, gender: d.gender === 'f' ? 'f' : 'm', dept: d.dept, grade: d.grade, role: String(d.role ?? '용병').slice(0, 16), stats: st,
-    look: { skin: L.skin.toLowerCase(), hair: L.hair.toLowerCase(), coat: L.coat.toLowerCase(), coat2: L.coat2.toLowerCase(), pants: L.pants.toLowerCase(), hairStyle: L.hairStyle, hat: hats.includes(L.hat) ? L.hat : 'none', extra: extras.includes(L.extra) ? L.extra : 'none' },
+    look: { skin: L.skin.toLowerCase(), hair: L.hair.toLowerCase(), coat: L.coat.toLowerCase(), coat2: L.coat2.toLowerCase(), pants: L.pants.toLowerCase(), hairStyle: L.hairStyle, ...(OUTFIT[L.outfit] ? { outfit: L.outfit } : {}), hat: hats.includes(L.hat) ? L.hat : 'none', extra: extras.includes(L.extra) ? L.extra : 'none' },
     weapon, trait: TRAIT[d.trait] ? d.trait : null, fee: clamp(Math.round(Number(d.fee) || 0), 0, 99999), wage: clamp(Math.round(Number(d.wage) || 0), 0, 9999), interviewed: !!d.interviewed, ab: [] };
 }
 

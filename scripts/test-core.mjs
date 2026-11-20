@@ -527,6 +527,22 @@ await t('긴급 습격 정산: 승리=전리품·평판·사기, 패배=약탈·
   // 다음 날: 카운터 초기화
   const d = new Sim(null, () => 0.5); d.raid.today = 2; d.nextDay(d.buildReport()); assert.equal(d.raid.today, 0);
 });
+await t('복장 30종(참고 자료 15벌 × 남/여): 4방향 × 3걸음 모두 만들어지고, 모든 글자에 색이 있고, 셀 밖으로 나가지 않으며, 저장/복원된다', async () => {
+  const { OUTFITS, OUTFIT } = await import('../src/game/outfits.js'); const { buildOutfit, outfitPalette } = await import('../src/game/outfit.js');
+  assert.equal(OUTFITS.length, 30); assert.equal(OUTFITS.filter((o) => o.g === 'f').length, 15); assert.equal(new Set(OUTFITS.map((o) => o.id)).size, 30); assert.equal(new Set(OUTFITS.map((o) => o.name)).size, 30, '이름 고유');
+  const legacy = new Set('oOshlxuvywFHKIGBCEDUVRrQcW.');
+  for (const o of OUTFITS) {
+    const pal = outfitPalette(o.spec.pal); for (const [k, v] of Object.entries(pal)) assert.ok(/^#[0-9a-f]{6}$/.test(v), `${o.id} 색 ${k}=${v}`);
+    for (const d of ['down', 'left', 'right', 'up']) for (let f = 0; f < 3; f++) {
+      const rows = buildOutfit(d, f, o.spec); assert.equal(rows.length, 48); let n = 0;
+      for (const r of rows) { assert.equal(r.length, 32); for (const ch of r) { assert.ok(legacy.has(ch) || pal[ch], `${o.id} ${d}${f} 색 없는 글자 ${ch}`); if (ch !== '.') n++; } }
+      assert.ok(n > 300, `${o.id} ${d}${f} 도트가 너무 적음 ${n}`); assert.ok(/^\.+$/.test(rows[0]) && /^\.+$/.test(rows[47]), '위·아래 여백');
+      assert.ok(rows.every((r) => r[0] === '.' && r[31] === '.'), `${o.id} ${d}${f} 좌우 가장자리가 비어 있어야 함`);
+    }
+  }
+  const s = new Sim(null, () => 0.5); assert.ok(s.setOutfit('c02', 'o14m').ok); assert.ok(!s.setOutfit('c02', 'zzz').ok); const r2 = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(r2.byId.c02.look.outfit, 'o14m', '저장/복원'); assert.ok(s.setOutfit('c02', null).ok); assert.equal(s.byId.c02.look.outfit, undefined);
+  const fresh = new Sim(null, () => 0.5); assert.ok(fresh.units.every((u) => OUTFIT[u.look.outfit]?.g === u.gender), '로스터 모두 성별에 맞는 기본 복장 보유');
+});
 await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
   assert.equal(HAIR_STYLES.length, 79, '기본 48 + 헤어 템플릿 30 + 은발 원본 1'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 79); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 79, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 31, '템플릿 30종 + 은발 원본은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 24);
   const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 28); assert.equal(ext.filter((s) => s.g === 'm').length, 14); assert.equal(ext.filter((s) => s.g === 'f').length, 14);
