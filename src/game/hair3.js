@@ -163,7 +163,13 @@ export function hairGrid(view, style) {
 
 /** P(색, x, y, w, h): 실제 픽셀 사각형. 뿌리 col → 끝 tip 그라데이션은 y 가 아래일수록 tip 에 가깝게. */
 export function drawHair3(P, view, style, col, tip) {
-  const { g, o } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
+  const { g: vg } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
+  // 설계 공간(머리 x8..23 × 피부 y7..21)을 템플릿 머리(앞/뒤 x10..22, 옆 x9..22 · 피부 y5..17)로 옮긴다: 대상 픽셀마다 설계 격자를 거꾸로 조회한다.
+  const X0 = view === 'side' ? 9 : 10, SX = view === 'side' ? 0.875 : 0.8125, Y0 = 2.4, SY = 0.867, g = new Grid();
+  for (let ty = 0; ty < 48; ty++) for (let tx = 0; tx < 32; tx++) {
+    const vx = Math.round(8 + (tx - X0 + 0.5) / SX - 0.5), vy = Math.round(4 + (ty - Y0 + 0.5) / SY - 0.5);
+    if (vg.has(vx, vy)) { g.set(tx, ty); const mk = vg.mark.get(vg.k(vx, vy)); if (mk) g.mark.set(g.k(tx, ty), mk); }
+  }
   const mid = (x, y) => { let rgb = c0; if (t0) { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); rgb = c0.map((v, i) => v + (t0[i] - v) * tt); } return rgb; };
   const out = new Map();
   for (const [x, y] of g.m.values()) {
