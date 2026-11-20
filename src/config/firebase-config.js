@@ -9,12 +9,12 @@
 //  값이 비어 있으면 앱은 "로컬 시험 모드"로 동작하며, 이 모드는 화면에 그대로 표시됩니다.
 // ─────────────────────────────────────────────────────────────
 const placeholder = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT_ID.firebasestorage.app',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyApx7HO0UEwHuVwMAyGVFeOqyLXI-x8ezc',
+  authDomain: 'chungong-b603b.firebaseapp.com',
+  projectId: 'chungong-b603b',
+  storageBucket: 'chungong-b603b.firebasestorage.app',
+  messagingSenderId: '84655253094',
+  appId: '1:84655253094:web:fcb9ea917a87ee48316fa7',
 };
 
 /* global __FIREBASE_CONFIG__ */
