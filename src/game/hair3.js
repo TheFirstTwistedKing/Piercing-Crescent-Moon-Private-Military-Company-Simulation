@@ -190,7 +190,7 @@ function formShade(g, bx, mid, c0) {
   let x0 = 99, x1 = -1, y0 = 99, y1 = -1; for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   const cx = (bx.x0 + bx.x1 + 1) / 2, hw = Math.max(6, (x1 - x0) / 2 + 1), H = Math.max(6, y1 - y0 + 1), flow = (x, y) => x + Math.round(((x + 0.5 - cx) / hw) * (y - y0) * 0.24);
   // 끝 가닥: 긴 머리 아래쪽 끝을 가닥(4칸 폭)마다 길이를 달리 깎는다
-  for (const [x, y] of pts) { if (g.mark.get(g.k(x, y)) === 'stub' || has(x, y + 1) || (y - y0) / H < 0.72) continue; const gr = Math.floor(flow(x, y) / 4), r = hs(gr * 7 + 3); if (r < 0.22 && has(x, y - 1) && has(x, y - 2)) { g.del(x, y); if (has(x, y - 1) && !has(x, y - 0) && r < 0.1 && has(x, y - 2) && has(x, y - 3)) g.del(x, y - 1); } }
+  for (const [x, y] of pts) { if (g.mark.get(g.k(x, y)) === 'stub' || has(x, y + 1) || (y - y0) / H < 0.3) continue; const gr = Math.floor(flow(x, y) / 4), r = hs(gr * 7 + 3), lowEdge = (y - y0) / H >= 0.72; if (r < (lowEdge ? 0.3 : 0.2) && has(x, y - 1) && has(x, y - 2) && has(x, y - 3)) { g.del(x, y); if (lowEdge && r < 0.1 && has(x, y - 2) && has(x, y - 3) && has(x, y - 4)) g.del(x, y - 1); } }
   pts = [...g.m.values()];
   const dist = new Map(); let frontier = [];
   for (const [x, y] of pts) if (!has(x - 1, y) || !has(x + 1, y) || !has(x, y - 1) || !has(x, y + 1)) { dist.set(g.k(x, y), 0); frontier.push([x, y]); }
