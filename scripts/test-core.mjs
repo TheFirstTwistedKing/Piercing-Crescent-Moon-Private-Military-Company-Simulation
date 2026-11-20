@@ -4,7 +4,7 @@ import { hashSecret, verifySecret, makeRecoveryCodes, normalizeRecovery } from '
 import { findPath, PATROLS, ROOMS, roomFreeTiles, roomDoorTile, isSolid, GATE, CAMERAS, MW, MH } from '../src/game/map.js';
 import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChance } from '../src/game/sim.js';
 import { nickKey, nickProblem } from '../src/core/nick.js';
-import { TRAITS, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
+import { TRAITS, TRAIT, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
 import { HAIR_STYLES, HAIR_COLORS, HAIR, drawHair } from '../src/game/hair.js';
 import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, drawWeapon } from '../src/game/weapons.js';
 import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
@@ -14,6 +14,7 @@ import { ITEMS, ITEM, STAT_ITEMS, EQUIPMENT, CONSUMABLES, FURNITURE, ROOM_KEYS, 
 import { LEADER_IDS, LEADER_TALK, REQUEST_COST } from '../src/game/leaders.js';
 import { SLOTS, FURNACE, yardWorkTiles, isOutdoor } from '../src/game/map.js';
 import { ROSTER, DEPTS, MISSIONS, MISSION, MONO, GROUP_MISSIONS, GMISSION } from '../src/game/data.js';
+import { RECRUIT, GRADES, INTERVIEW_COST, REROLL_COST, MAX_REROLLS, makeCandidates, cleanDef, candidateView } from '../src/game/recruit.js';
 import { RaidBattle, planRaid, defenderFrom, RAID_CHANCE, FORMATIONS, ENEMY_TYPES, ABILITY_INFO, ARENA } from '../src/game/raid.js';
 import { EVENTS, EVENT, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from '../src/game/events.js';
 
@@ -541,5 +542,61 @@ await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽
   const used = new Set(); drawHair((col) => used.add(col), 'up', 'f11', '#101010', '#c0261c'); assert.ok(used.size > 3, '그라데이션 색이 여러 단계');
   assert.ok(HAIR.m24.v2 && HAIR.f24.v2);
   const sx = new Sim(null, () => 0.5); assert.ok(sx.setHair('c04', 'f24', '#2d6a4f').ok && sx.setHair('c05', 'm24', '#F4F4F6').ok); const rx = new Sim(JSON.parse(JSON.stringify(sx.serialize())), () => 0.5); assert.equal(rx.byId.c04.look.hairStyle, 'f24'); assert.equal(rx.byId.c05.look.hairStyle, 'm24'); assert.equal(rx.byId.c05.look.hair, '#f4f4f6', '저장/복원');
+});
+await t('용병 모집 후보: 결정적 생성, 등급별 능력치·비용 범위, 이름 중복 없음, 면접 전에는 정확한 값·특성을 숨김, 데이터 검증', () => {
+  const taken = { names: new Set(ROSTER.map((r) => r.name)), latins: new Set(ROSTER.map((r) => r.latin)) };
+  const a = makeCandidates({ seed: 7, day: 3, taken }), b = makeCandidates({ seed: 7, day: 3, taken }); assert.deepEqual(a, b, '같은 시드=같은 후보'); assert.equal(a.length, 4); assert.notDeepEqual(a, makeCandidates({ seed: 8, day: 3, taken }));
+  const grades = new Set(); let withTrait = 0, bad = 0, n = 0;
+  for (let sd = 1; sd <= 300; sd++) for (const c of makeCandidates({ seed: sd, day: 1 + (sd % 30), taken })) {
+    n++; grades.add(c.grade); const G = GRADES[c.grade]; assert.equal(c.dept, 'rager'); assert.ok(c.stats.cmb >= G.cmb[0] && c.stats.cmb <= G.cmb[1], `${c.grade} 전투 ${c.stats.cmb}`); assert.ok(c.fee >= G.fee[0] * 0.8 - 100 && c.fee <= G.fee[1] + 100 && c.wage >= G.wage[0] - 5 && c.wage <= G.wage[1] + 5, `${c.grade} 비용`);
+    assert.ok(c.stats.cmb >= c.stats.med && c.stats.cmb >= c.stats.int, '공격팀 성향: 전투 중심'); assert.ok(!taken.names.has(c.name) && !taken.latins.has(c.latin), '기존 직원과 이름 중복 없음'); assert.ok(RECRUIT.rager.weapons.includes(c.weapon));
+    assert.ok(cleanDef(c), '생성된 후보는 검증을 통과'); if (c.trait) { withTrait++; if (TRAIT[c.trait].bad) bad++; assert.ok(TRAIT[c.trait].rarity !== 'l', '전설 특성은 나오지 않음'); }
+  }
+  assert.deepEqual([...grades].sort(), ['elite', 'rookie', 'veteran']); assert.ok(withTrait / n > 0.3 && bad > 0 && bad < withTrait, '특성: 좋은 것이 많고 나쁜 것도 가끔');
+  const four = makeCandidates({ seed: 11, day: 2, taken }); assert.equal(new Set(four.map((c) => c.name)).size, 4); assert.equal(new Set(four.map((c) => c.latin)).size, 4);
+  const early = makeCandidates({ seed: 1, day: 1, count: 400, taken }).filter((c) => c.grade === 'elite').length, late = makeCandidates({ seed: 1, day: 30, count: 400, taken }).filter((c) => c.grade === 'elite').length; assert.ok(late > early, '날이 갈수록 정예가 늘어난다');
+  // 면접 전/후 보기
+  const c = { ...makeCandidates({ seed: 5, day: 1, taken }).find((x) => x.trait) || makeCandidates({ seed: 5, day: 1, taken })[0] }; c.trait = c.trait || Object.keys(TRAIT)[0];
+  const v0 = candidateView({ ...c, interviewed: false }); assert.equal(v0.trait, null); assert.ok(Object.values(v0.stats).every((s) => s.band && s.exact === undefined)); assert.ok(/^\d+~\d+$/.test(v0.stats.cmb.band) && c.stats.cmb >= +v0.stats.cmb.band.split('~')[0] && c.stats.cmb <= +v0.stats.cmb.band.split('~')[1], '범위 안에 실제 값이 있다');
+  const v1 = candidateView({ ...c, interviewed: true }); assert.equal(v1.stats.cmb.exact, c.stats.cmb); assert.ok(v1.trait && v1.trait.id === c.trait);
+  // 데이터 검증
+  assert.equal(cleanDef({ ...c, weapon: 'laser' }), null); assert.equal(cleanDef({ ...c, name: '<b>' }), null); assert.equal(cleanDef({ ...c, look: { ...c.look, skin: 'red' } }), null); assert.equal(cleanDef({ ...c, dept: 'medical' }), null); assert.equal(cleanDef({ ...c, id: 'zz' }), null); assert.equal(cleanDef({ ...c, weapon: 'frostblade' }), null, '서리 대검은 불가');
+  const d = cleanDef({ ...c, stats: { ...c.stats, cmb: 9999 }, fee: -5, wage: 1e9, trait: 'nope', look: { ...c.look, hat: 'crown' } }); assert.equal(d.stats.cmb, 100); assert.equal(d.fee, 0); assert.equal(d.wage, 9999); assert.equal(d.trait, null); assert.equal(d.look.hat, 'none');
+});
+await t('용병 고용: 후보 풀·면접·고용·급여·상한·계약 해지·새로 구하기·저장/복원', () => {
+  const s = new Sim(null, () => 0.5), v = s.recruitView('rager'); assert.equal(v.cands.length, 4); assert.equal(v.cap, 6); assert.equal(v.hired, 0); assert.equal(v.rerollsLeft, MAX_REROLLS); assert.equal(s.recruitView('medical'), null, '지금은 Rager 만');
+  assert.ok(v.cands.every((c) => !c.interviewed && c.trait === null && Object.values(c.stats).every((x) => x.band)), '면접 전에는 숨김');
+  // 면접
+  const c0 = v.cands[0], f0 = s.funds; const iv = s.interviewCandidate(c0.id); assert.ok(iv.ok); assert.equal(s.funds, f0 - INTERVIEW_COST); assert.ok(iv.view.stats.cmb.exact >= 62); assert.equal(s.interviewCandidate(c0.id).ok, false, '두 번 면접 불가'); assert.equal(s.interviewCandidate('nope').ok, false);
+  // 고용
+  const up0 = s.buildReport(true).upkeep, tgt = s.recruitView().cands[0], f1 = s.funds; s.funds = tgt.fee - 1; assert.equal(s.hireCandidate(tgt.id).ok, false, '자금 부족'); s.funds = f1;
+  const hr = s.hireCandidate(tgt.id); assert.ok(hr.ok && /^r\d\d$/.test(hr.id)); assert.equal(s.funds, f1 - tgt.fee); assert.equal(s.units.length, 26); const u = s.byId[hr.id]; assert.ok(u && u.recruit && u.dept === 'rager' && u.home === 'rager' && u.name === tgt.name && u.latin === tgt.latin && u.role.startsWith('용병'));
+  assert.equal(u.weapon, tgt.weapon); assert.equal(u.look.hairStyle, tgt.look.hairStyle); assert.equal(u.gender, tgt.gender); assert.ok(u.dv.cmb > 60, '능력치 파생 계산됨'); assert.equal(s.recruitView().cands.length, 3, '고용한 후보는 목록에서 빠짐'); assert.equal(s.recruitView().hired, 1);
+  assert.equal(s.buildReport(true).upkeep - up0, Math.max(0, 300 + u.fx.upkeep) + tgt.wage, '기본 유지비(특성 반영)와 급여가 운영비에 더해짐'); assert.equal(s.dayLog.hires.filter((x) => x.kind === 'hire').length, 1); assert.equal(s.buildReport(true).wages, tgt.wage);
+  assert.ok(s.units.filter((x) => x.dept === 'rager').length === 4); assert.equal(s.leaderUnit('rager').id, 'c04', '팀장은 그대로');
+  // 임무·커스터마이징·습격에 참여
+  assert.ok(s.sendMission(hr.id, 'rg1').ok); assert.equal(s.dismissRecruit(hr.id).ok, false, '임무 중 해지 불가'); assert.equal(s.dismissRecruit('c04').ok, false, '기본 직원은 해지 불가');
+  const sq = new Sim(null, () => 0.5); sq.funds = 1e6; const first = sq.hireCandidate(sq.recruitView().cands[0].id); assert.ok(sq.setStat(first.id, 'str', 5).ok && sq.setHair(first.id, 'f3', '#112233').ok); sq.startRaid({ types: ['grunt'] }); assert.ok(sq.raidInfo().defenders.some((d) => d.id === first.id), '용병도 습격에 참전');
+  // 상한 6명 + 새로 구하기(비용·횟수 제한) + 이름 중복 없음
+  const m = new Sim(null, () => 0.5); m.funds = 1e7; let hired = 0; for (let i = 0; i < 12 && hired < 6; i++) { for (const c of m.recruitView().cands) { if (hired >= 6) break; if (m.hireCandidate(c.id).ok) hired++; } if (hired < 6) assert.ok(m.rerollCandidates().ok || m.rec.rerolls >= MAX_REROLLS); }
+  assert.equal(m.recruitCount('rager'), 6); const extra = m.recruitView().cands[0] || (m.rerollCandidates().ok && m.recruitView().cands[0]); if (extra) assert.equal(m.hireCandidate(extra.id).ok, false, '7번째는 불가');
+  assert.equal(new Set(m.units.map((x) => x.name)).size, m.units.length, '이름 중복 없음'); assert.equal(new Set(m.units.map((x) => x.latin)).size, m.units.length);
+  const r = new Sim(null, () => 0.5); const before = r.recruitView().cands.map((c) => c.name).join(), fr = r.funds; assert.ok(r.rerollCandidates().ok); assert.equal(r.funds, fr - REROLL_COST); assert.notEqual(r.recruitView().cands.map((c) => c.name).join(), before, '새로 구하면 후보가 바뀐다'); assert.equal(r.recruitView().rerollsLeft, MAX_REROLLS - 1);
+  r.rerollCandidates(); r.rerollCandidates(); assert.equal(r.rerollCandidates().ok, false, '하루 3회'); const poor = new Sim(null, () => 0.5); poor.funds = REROLL_COST - 1; assert.equal(poor.rerollCandidates().ok, false); poor.funds = INTERVIEW_COST - 1; assert.equal(poor.interviewCandidate(poor.recruitView().cands[0].id).ok, false);
+  // 하루가 지나면 후보 갱신 + 새로 구하기 횟수 초기화
+  const names0 = r.recruitView().cands.map((c) => c.name).join(); r.nextDay(r.buildReport()); assert.equal(r.recruitView().day, 2); assert.equal(r.recruitView().rerollsLeft, MAX_REROLLS); assert.notEqual(r.recruitView().cands.map((c) => c.name).join(), names0);
+  // 계약 해지
+  const dm = new Sim(null, () => 0.5); dm.funds = 1e6; const h1 = dm.hireCandidate(dm.recruitView().cands[0].id), upk = dm.buildReport(true).upkeep; const dr = dm.dismissRecruit(h1.id); assert.ok(dr.ok); assert.equal(dm.units.length, 25); assert.equal(dm.byId[h1.id], undefined); assert.ok(dm.buildReport(true).upkeep < upk, '급여 중단'); assert.equal(dm.recruitCount('rager'), 0);
+  // 저장/복원: 용병(개별 변경 포함)·후보 풀(면접 상태)·횟수 유지
+  const sv = new Sim(null, () => 0.5); sv.funds = 1e6; const k = sv.recruitView().cands[1]; sv.interviewCandidate(k.id); const hh = sv.hireCandidate(sv.recruitView().cands[0].id); sv.setStat(hh.id, 'str', 6); sv.setHair(hh.id, 'm24', '#2d6a4f'); sv.byId[hh.id].hp = 44; sv.rec.rerolls = 2;
+  const snap = JSON.parse(JSON.stringify(sv.serialize())), rs = new Sim(snap, () => 0.5), ru = rs.byId[hh.id]; assert.ok(ru && ru.recruit && ru.wage === sv.byId[hh.id].wage && ru.hp === 44 && ru.alloc.str === 6 && ru.look.hairStyle === 'm24' && ru.look.hair === '#2d6a4f'); assert.equal(rs.units.length, 26); assert.equal(rs.recruitCount('rager'), 1);
+  assert.deepEqual(rs.recruitView().cands.map((c) => [c.id, c.interviewed]), sv.recruitView().cands.map((c) => [c.id, c.interviewed])); assert.equal(rs.recruitView().rerollsLeft, MAX_REROLLS - 2); assert.equal(rs.funds, sv.funds, '복원해도 다시 결제하지 않음'); assert.equal(rs.buildReport(true).upkeep, sv.buildReport(true).upkeep, '복원 후 운영비 동일'); assert.equal(rs.hireCandidate(rs.recruitView().cands[0].id).id, 'r02', '다음 용병 id 이어짐');
+  // 손상/옛 저장: 잘못된 용병·후보는 버리고, 이름이 겹치면 건너뛴다
+  const bad = JSON.parse(JSON.stringify(snap)); bad.recruits.push({ ...bad.recruits[0], id: 'r09', weapon: 'laser' }, { ...bad.recruits[0], id: 'r10', name: '강태오' }, { ...bad.recruits[0], id: 'x1' }, null, 5); bad.rec.cands.push({ id: 'k99' }, null);
+  const bs = new Sim(bad, () => 0.5); assert.equal(bs.recruitCount('rager'), 1); assert.equal(bs.units.length, 26); assert.ok(bs.recruitView().cands.every((c) => cleanDef({ ...c, stats: Object.fromEntries(Object.entries(c.stats).map(([kk, x]) => [kk, x.exact ?? x.mid])), look: c.look, trait: null, fee: c.fee, wage: c.wage, interviewed: c.interviewed })));
+  const dup = JSON.parse(JSON.stringify(snap)); dup.recruits.push({ ...dup.recruits[0] }); assert.equal(new Sim(dup, () => 0.5).recruitCount('rager'), 1, '같은 id 는 한 번만');
+  const old = JSON.parse(JSON.stringify(snap)); delete old.recruits; delete old.rec; delete old.rseq; delete old.units[hh.id]; const os = new Sim(old, () => 0.5); assert.equal(os.units.length, 25); assert.equal(os.recruitView().cands.length, 4, '옛 저장에서도 후보가 새로 생긴다');
+  // 옛 저장의 dayLog(hires/raids 없음)에도 안전
+  const od = JSON.parse(JSON.stringify(snap)); delete od.dayLog.hires; delete od.dayLog.raids; delete od.dayLog.events; const ods = new Sim(od, () => 0.5); assert.ok(ods.interviewCandidate(ods.recruitView().cands.find((c) => !c.interviewed).id).ok); assert.equal(ods.buildReport(true).raids.length, 0);
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

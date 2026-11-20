@@ -394,3 +394,21 @@ body[data-screen='panel-field'] #holo { opacity: .55; }
 .rd-btns { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 560px) { .rd-forms { grid-template-columns: 1fr; } .rd-form { padding: var(--s2) var(--s3); } .rd-bars { gap: var(--s3); } }
 @media (max-height: 520px) and (orientation: landscape) { .rd { width: min(820px, 100%); } .rd-forms { grid-template-columns: repeat(3, 1fr); } .rd-form small { display: none; } .rd .rd-cv { max-height: 38dvh; width: auto; margin: 0 auto; } .rd-depts { display: none; } }
+
+/* ── 용병 모집 ── */
+.rc-head { display: grid; gap: var(--s2); padding: var(--s4) 0 var(--s3); border-left: 3px solid var(--c); padding-left: var(--s4); margin: var(--s4) 0 var(--s4); }
+.rc-head h2 { font: 700 22px/1.3 var(--ui); } .rc-head h2 small { margin-left: var(--s3); color: var(--ink3); font: 400 13px var(--ui); }
+.rc-meta { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s4); align-items: center; font: 500 12px/1.4 var(--mono); color: var(--ink2); }
+.rc-cards { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s3); }
+.rc-card { display: grid; gap: var(--s3); align-content: start; padding: var(--s4); background: rgba(190, 215, 255, .04); box-shadow: inset 0 0 0 1px var(--line); } .rc-card.seen { box-shadow: inset 0 0 0 1px var(--line2); }
+.rc-top { display: flex; gap: var(--s3); align-items: center; } .rc-portrait { flex: none; background: #0a0e14; image-rendering: pixelated; }
+.rc-id { display: grid; gap: 2px; min-width: 0; } .rc-id b { font-size: 16px; } .rc-id small { color: var(--ink3); font: 500 11px/1.4 var(--mono); }
+.rc-grade { justify-self: start; font: 600 11px/1 var(--mono); padding: 3px 7px; color: var(--g); box-shadow: inset 0 0 0 1px var(--g); }
+.rc-stats { list-style: none; display: grid; gap: 5px; } .rc-stats li { display: grid; grid-template-columns: 34px 1fr 44px; gap: var(--s2); align-items: center; font: 500 12px/1 var(--mono); color: var(--ink2); } .rc-stats b { text-align: right; font-weight: 600; color: var(--ink); }
+.rc-bar { height: 6px; background: rgba(190, 215, 255, .12); } .rc-bar i { display: block; height: 100%; background: var(--green); } .rc-bar.fuzzy i { background: repeating-linear-gradient(90deg, var(--ink3) 0 4px, transparent 4px 6px); }
+.rc-trait { display: grid; gap: 3px; font-size: 13px; color: var(--ink2); } .rc-trait small { color: var(--ink3); font-size: 12px; } .rc-trait.hidden { color: var(--ink3); font: 500 12px var(--mono); }
+.rc-price { display: grid; gap: 2px; font: 500 12px/1.4 var(--mono); color: var(--ink2); }
+.rc-btns { display: flex; gap: var(--s2); flex-wrap: wrap; } .rc-btns .btn { flex: 1 1 auto; }
+.rc-teamwrap { margin-top: var(--s6); } .rc-team { list-style: none; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); } .rc-team li { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); background: var(--bg); flex-wrap: wrap; } .rc-team small { display: block; color: var(--ink3); font: 500 11px/1.5 var(--mono); }
+.rc-empty { padding: var(--s5) 0; }
+@media (max-width: 480px) { .rc-cards { grid-template-columns: 1fr; } .rc-head h2 small { display: block; margin: 2px 0 0; } }

@@ -17,6 +17,7 @@ import { mountCustom } from './screens/custom.js';
 import { mountResearch } from './screens/research.js';
 import { mountShop } from './screens/shop.js';
 import { mountLeader } from './screens/leader.js';
+import { mountRecruit } from './screens/recruit.js';
 import { engine } from './game/engine.js';
 import { installEventHost } from './screens/events.js';
 import { installRaidHost } from './screens/raid.js';
@@ -82,7 +83,7 @@ function startWatch() {
   }, 5000);
 }
 
-const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport, '#/panel/custom': mountCustom, '#/panel/research': mountResearch, '#/panel/shop': mountShop, '#/panel/leader': mountLeader };
+const PANEL = { '#/panel': mountPanel, '#/panel/cctv': mountCctv, '#/panel/field': mountField, '#/panel/report': mountReport, '#/panel/custom': mountCustom, '#/panel/research': mountResearch, '#/panel/shop': mountShop, '#/panel/leader': mountLeader, '#/panel/recruit': mountRecruit };
 
 let chain = Promise.resolve();
 function route(force = false) { chain = chain.then(() => doRoute(force)).catch((e) => console.error(e)); return chain; }

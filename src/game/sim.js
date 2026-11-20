@@ -7,6 +7,7 @@ import { LEADER_IDS, LEADER_SET, LEADER_TALK, AFF_MAX, REQUEST_COST } from './le
 import { WEAPON } from './weapons.js';
 import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
 import { HAIR } from './hair.js';
+import { RECRUIT, INTERVIEW_COST, REROLL_COST, MAX_REROLLS, makeCandidates, cleanDef, candidateView } from './recruit.js';
 import { RaidBattle, planRaid, defenderFrom, RAID_CHANCE, FORMATIONS, ENEMY_TYPES } from './raid.js';
 import { EVENTS, EVENT, EV_CHANCE, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from './events.js';
 import { RESEARCH_BY_KEY, freshResearch } from './research.js';
@@ -69,6 +70,7 @@ export class Sim {
     this.inv = {}; this.placed = Object.fromEntries(ROOM_KEYS.map((k) => [k, Array(FURN_SLOTS).fill(null)]));
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
     this.groups = {}; this.gseq = 0;
+    this.recruits = []; this.rseq = 0; this.rec = { day: 0, base: 1 + Math.floor(rand() * 1e9), rerolls: 0, n: 0, cands: [] };
     this.raid = { pending: null, acc: 0, today: 0, on: Sim.RAIDS_ON, resume: 0 };
     this.ev = { pending: null, cd: {}, today: 0, acc: 0, buffs: [], on: Sim.EVENTS_ON, resume: 0 };
     this.listeners = {}; this.dirty = false;
@@ -76,6 +78,7 @@ export class Sim {
     for (const u of this.units) { const s = this.spot(u.home); u.place(s[0], s[1]); }
     this.refresh();
     if (saved) this.restore(saved);
+    this.ensureRecruits();
   }
 
   /* ── 이벤트/로그 ── */
@@ -87,7 +90,7 @@ export class Sim {
     if (toast && !this.quiet) this.emit('toast', e);
     this.dirty = true;
   }
-  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [], fees: 0, raids: [] }; }
+  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [], fees: 0, raids: [], hires: [] }; }
 
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
 
@@ -200,6 +203,58 @@ export class Sim {
     return { ok: false, reason: '알 수 없는 대화' };
   }
 
+
+  /* ── 용병 모집 ──
+     부서마다 매일 후보 4명이 새로 나온다(수수료를 내고 하루 3번까지 새로 구할 수 있음). 면접으로 정확한 능력치·특성을 확인한 뒤 고용하면
+     실제 직원이 되어 임무·순찰·습격·커스터마이징을 모두 함께한다. 고용할 때 수수료, 고용하는 동안 매일 급여가 운영비에 더해진다. */
+  recruitTaken() { return { names: new Set([...this.units.map((u) => u.name), ...this.rec.cands.map((c) => c.name)]), latins: new Set([...this.units.map((u) => u.latin), ...this.rec.cands.map((c) => c.latin)]) }; }
+  ensureRecruits() {
+    if (this.rec.day === this.day && this.rec.cands.length) return;
+    if (this.rec.day !== this.day) this.rec.rerolls = 0;
+    this.rec.day = this.day; this.rec.cands = []; const taken = this.recruitTaken();
+    this.rec.cands = makeCandidates({ seed: this.rec.base + this.day * 7919 + this.rec.rerolls * 104729, day: this.day, dept: 'rager', taken, startN: this.rec.n }); this.rec.n += this.rec.cands.length; this.dirty = true;
+  }
+  recruitCount(dept) { return this.units.filter((u) => u.recruit && u.dept === dept).length; }
+  recruitView(dept = 'rager') {
+    if (!RECRUIT[dept]) return null; this.ensureRecruits();
+    return { dept, day: this.day, cap: RECRUIT[dept].cap, hired: this.recruitCount(dept), interviewCost: INTERVIEW_COST, rerollCost: REROLL_COST, rerollsLeft: MAX_REROLLS - this.rec.rerolls,
+      cands: this.rec.cands.filter((c) => c.dept === dept).map(candidateView), team: this.units.filter((u) => u.recruit && u.dept === dept).map((u) => ({ id: u.id, name: u.name, latin: u.latin, grade: u.grade, role: u.role, wage: u.wage, hp: Math.round(u.hp), busy: u.mode === 'mission' })) };
+  }
+  interviewCandidate(cid) {
+    this.ensureRecruits(); const c = this.rec.cands.find((x) => x.id === cid); if (!c) return { ok: false, reason: '없는 후보입니다.' };
+    if (c.interviewed) return { ok: false, reason: '이미 면접을 봤습니다.' }; if (this.funds < INTERVIEW_COST) return { ok: false, reason: `자금이 부족합니다. (면접비 ${INTERVIEW_COST.toLocaleString('ko-KR')} CR)` };
+    this.funds -= INTERVIEW_COST; c.interviewed = true; this.dayLog.hires.push({ name: c.name, fee: INTERVIEW_COST, kind: 'interview' }); this.dirty = true;
+    this.note(`${c.name} 면접 — 면접비 -${INTERVIEW_COST.toLocaleString('ko-KR')} CR`, 'order', false); return { ok: true, view: candidateView(c) };
+  }
+  rerollCandidates() {
+    if (this.rec.rerolls >= MAX_REROLLS) return { ok: false, reason: '오늘은 더 이상 새로 구할 수 없습니다.' }; if (this.funds < REROLL_COST) return { ok: false, reason: `자금이 부족합니다. (필요 ${REROLL_COST.toLocaleString('ko-KR')} CR)` };
+    this.funds -= REROLL_COST; this.rec.rerolls++; this.dayLog.hires.push({ name: '모집 공고', fee: REROLL_COST, kind: 'reroll' }); this.rec.cands = []; this.ensureRecruits(); this.note(`용병 모집 공고를 새로 냈다 (-${REROLL_COST.toLocaleString('ko-KR')} CR)`, 'order', false); return { ok: true };
+  }
+  /** 고용: 정의(def)로 새 직원을 만든다. 저장 복원에서도 이 함수를 쓴다(요금 없음). */
+  addRecruit(def) {
+    const id = def.id; if (this.byId[id]) return null;
+    const base = { id, name: def.name, role: `용병 · ${def.role}`, dept: def.dept, stats: { ...def.stats }, look: { ...def.look }, gender: def.gender, weapon: def.weapon, latin: def.latin };
+    const u = new Unit(base, this.rand); u.recruit = true; u.wage = def.wage; u.grade = def.grade; u.hired = def.hired || this.day;
+    if (def.trait) { u.traits = [def.trait]; u.eq = [def.trait]; u.used = 1; }
+    this.units.push(u); this.byId[id] = u; const sp = this.spot(u.home); u.place(sp[0], sp[1]); return u;
+  }
+  hireCandidate(cid) {
+    this.ensureRecruits(); const c = this.rec.cands.find((x) => x.id === cid); if (!c) return { ok: false, reason: '없는 후보입니다.' };
+    if (this.recruitCount(c.dept) >= RECRUIT[c.dept].cap) return { ok: false, reason: `이 부서의 용병은 최대 ${RECRUIT[c.dept].cap}명까지 고용할 수 있습니다.` };
+    if (this.funds < c.fee) return { ok: false, reason: `자금이 부족합니다. (필요 ${c.fee.toLocaleString('ko-KR')} CR)` };
+    const id = `r${String(++this.rseq).padStart(2, '0')}`, def = { ...c, id, hired: this.day, stats: { ...c.stats }, look: { ...c.look } };
+    this.funds -= c.fee; const u = this.addRecruit(def); if (!u) { this.funds += c.fee; this.rseq--; return { ok: false, reason: '고용할 수 없습니다.' }; }
+    this.recruits.push(def); this.rec.cands = this.rec.cands.filter((x) => x.id !== cid); this.dayLog.hires.push({ name: c.name, fee: c.fee, wage: c.wage, kind: 'hire' });
+    this.note(`${DEPT[c.dept].en} 용병 고용: ${c.name} (${c.role}) — 수수료 -${c.fee.toLocaleString('ko-KR')} CR · 일일 급여 ${c.wage.toLocaleString('ko-KR')} CR`, 'good', false);
+    this.refresh(); this.emit('recruit'); return { ok: true, id, name: c.name };
+  }
+  /** 계약 해지(용병만): 임무 중에는 불가. 수수료는 돌려받지 않는다. */
+  dismissRecruit(uid) {
+    const u = this.byId[uid]; if (!u?.recruit) return { ok: false, reason: '계약 해지할 수 있는 용병이 아닙니다.' };
+    if (u.mode === 'mission') return { ok: false, reason: '임무 수행 중에는 계약을 해지할 수 없습니다.' };
+    this.units = this.units.filter((x) => x !== u); delete this.byId[uid]; this.recruits = this.recruits.filter((d) => d.id !== uid);
+    this.note(`${u.name} 용병 계약 해지`, 'info', false); this.refresh(); this.emit('recruit'); return { ok: true, name: u.name };
+  }
 
   /* ── 긴급 습격 ──
      게임 1시간마다 아침 1% / 밤 5% 확률로 무법자가 기지를 덮친다(하루 최대 2회). 시간이 멈추고, 그 시각 기지에 있는 병력(임무 중인 인원 제외)이 맞서 싸운다.
@@ -724,7 +779,7 @@ export class Sim {
     }
     const L = this.dayLog;
     const income = L.missions.reduce((a, m) => a + m.reward, 0);
-    const upkeep = Math.max(0, this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep), 0) + this.furnitureUpkeep() + this.weaponUpkeep());
+    const upkeep = Math.max(0, this.units.reduce((a, u) => a + Math.max(0, UPKEEP_PER_UNIT + u.fx.upkeep) + (u.wage || 0), 0) + this.furnitureUpkeep() + this.weaponUpkeep());
     const depts = DEPTS.map((d) => {
       const members = this.units.filter((u) => u.dept === d.key);
       const ms = L.missions.filter((m) => m.dept === d.key);
@@ -733,7 +788,7 @@ export class Sim {
     const injured = this.units.filter((u) => u.hp < 50).map((u) => ({ name: u.name, hp: Math.round(u.hp) }));
     const m = L.missions;
     const summary = `임무 ${m.length}건(성공 ${m.filter((x) => x.result === 'success').length}, 부분 ${m.filter((x) => x.result === 'partial').length}, 실패 ${m.filter((x) => x.result === 'fail').length}), 순찰 ${L.patrols.length}회, 명령 ${L.orders}건. 수입 ${fmtCredits(income)}, 운영비 ${fmtCredits(-upkeep)}.`;
-    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), raids: (L.raids || []).slice(), workshopFees: L.fees || 0, weaponUpkeep: this.weaponUpkeep(), depts, injured, summary };
+    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), raids: (L.raids || []).slice(), hires: (L.hires || []).slice(), wages: this.units.reduce((a, u) => a + (u.wage || 0), 0), workshopFees: L.fees || 0, weaponUpkeep: this.weaponUpkeep(), depts, injured, summary };
   }
 
   /** 보고서 제출 후 다음 날로 */
@@ -753,6 +808,7 @@ export class Sim {
     this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
     this.refresh();   // 하루짜리 버프 해제 반영
+    this.ensureRecruits();   // 새 하루: 용병 후보 갱신
     this.note(`DAY ${this.day} 개시 — 자금 ${fmtCredits(this.funds)}`, 'info', false);
   }
 
@@ -760,12 +816,12 @@ export class Sim {
   serialize() {
     const units = {};
     for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, h2: u.look.hair2 || null, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, raid: { pending: this.raid.pending, today: this.raid.today, acc: Math.round(this.raid.acc) }, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, groups: Object.values(this.groups).map((g) => ({ gid: g.gid, mid: g.mid, ids: g.ids, remaining: Math.round(g.remaining) })), gseq: this.gseq, recruits: this.recruits.map((d) => ({ ...d, hired: d.hired })), rseq: this.rseq, rec: { day: this.rec.day, base: this.rec.base, rerolls: this.rec.rerolls, n: this.rec.n, cands: this.rec.cands }, raid: { pending: this.raid.pending, today: this.raid.today, acc: Math.round(this.raid.acc) }, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
     this.day = s.day; this.clock = s.clock; this.funds = s.funds; this.rep = s.rep || 0; this.ended = !!s.ended; this.dayStartFunds = s.dayStartFunds ?? s.funds;
-    this.dayLog = s.dayLog || this.freshLog(); this.log = s.log || [];
+    this.dayLog = { ...this.freshLog(), ...(s.dayLog || {}) }; this.log = s.log || [];   // 옛 저장에 없는 항목(events/raids/hires 등)은 기본값으로
     this.research = { ...freshResearch(), ...(s.research || {}) };
     this.research.abilities = (this.research.abilities || []).filter((a) => ABILITY[a]);
     if (s.weather && WEATHERS[s.weather.today] && WEATHERS[s.weather.next]) this.weather = { today: s.weather.today, next: s.weather.next };
@@ -784,6 +840,14 @@ export class Sim {
     this.raid.pending = rp && Array.isArray(rp.types) && rp.types.length >= 1 && rp.types.length <= 40 && rp.types.every((t) => ENEMY_TYPES[t]) && Number.isFinite(rp.seed)
       ? { size: rp.types.length, types: rp.types.slice(), seed: Math.floor(rp.seed), day: Math.max(1, Math.floor(rp.day || this.day)), tries: Math.max(0, Math.min(99, Math.floor(rp.tries || 0))), formation: FORMATIONS[rp.formation] ? rp.formation : 'balanced' } : null;
     if (this.raid.pending) this.speed = 0;
+    // 고용한 용병 복원(검증된 정의만) — 개별 상태(체력·커스터마이징 등)는 아래 units 루프에서 복원된다
+    this.units = this.units.filter((u) => !u.recruit); this.byId = Object.fromEntries(this.units.map((u) => [u.id, u])); this.recruits = []; this.rseq = Math.max(0, Math.floor(s.rseq || 0));
+    for (const raw of Array.isArray(s.recruits) ? s.recruits.slice(0, 40) : []) {
+      const d = cleanDef(raw); if (!d || !/^r\d+$/.test(d.id) || this.byId[d.id] || this.units.some((x) => x.name === d.name || x.latin === d.latin) || this.recruitCount(d.dept) >= RECRUIT[d.dept].cap) continue;
+      d.hired = Math.max(1, Math.floor(raw.hired || 1)); if (this.addRecruit(d)) { this.recruits.push(d); this.rseq = Math.max(this.rseq, Number(d.id.slice(1)) || 0); }
+    }
+    const rc = s.rec || {}; this.rec = { day: Math.max(0, Math.floor(rc.day || 0)), base: Number.isFinite(rc.base) ? Math.floor(rc.base) : this.rec.base, rerolls: Math.max(0, Math.min(MAX_REROLLS, Math.floor(rc.rerolls || 0))), n: Math.max(0, Math.floor(rc.n || 0)), cands: [] };
+    for (const raw of Array.isArray(rc.cands) ? rc.cands.slice(0, 12) : []) { const d = cleanDef(raw); if (d && /^k\d+$/.test(d.id) && !this.rec.cands.some((x) => x.id === d.id)) this.rec.cands.push(d); }
     for (const [id, st] of Object.entries(s.units || {})) {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
