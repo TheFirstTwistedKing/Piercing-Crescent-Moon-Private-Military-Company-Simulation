@@ -45,67 +45,67 @@ function drawWings(r, view, frame) {
   put(false); if (view !== 'side') put(true);
 }
 
-// 사람(몸·머리·얼굴·옷·팔다리)은 반 칸(실제 1픽셀) 해상도로 직접 그린다. 비율은 첨부 도트 스타일(큰 머리·큰 눈·셀 음영·짙은 갈색 외곽선)을 따르고,
-// 좌표 D(색, x, y, w, h)는 몸 기준 실제 픽셀(논리 칸 ×2) 단위다. 머리카락·모자·날개는 기존 도안(논리 칸)을 그대로 얹는다.
+// 사람(몸·머리·얼굴·옷·팔다리)은 실제 픽셀 해상도로 직접 그린다. 비율은 첨부 도트(큰 머리 · 큰 눈 · 셀 음영 · 짙은 외곽선)를 따른다:
+// 머리 x8..23 × y4..21(키의 약 37%), 몸통 x9..22 × y22..32, 팔 x6..8 / x23..25, 다리 x11..20 × y33..43. 좌표 D(색, x, y, w, h)는 몸 기준 실제 픽셀(논리 칸 ×2).
 const hash = (str) => { let h = 7; for (const ch of str) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0; return Math.abs(h); };
 const EYES = ['#3a82d0', '#6a4a30', '#3f9a62', '#8a5ac8', '#38404c'];
 function drawInner(c, dir, frame, L0, accent, weapon, wings, rec) {
   const L = L0;
-  const r = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };            // 논리 칸 좌표(머리카락·모자·무기·날개)
+  const r = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };            // 논리 칸 좌표(날개·무기)
   const D = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x / 2, y / 2, w / 2, h / 2); };   // 실제 픽셀 좌표
   const lift = frame === 1 ? 1 : frame === 2 ? -1 : 0; // +1: 왼다리 들기, -1: 오른다리 들기
-  const coatL = adj(L.coat, 16), coatD = adj(L.coat, -26), coat2L = adj(L.coat2, 14), coat2D = adj(L.coat2, -22), skinD = adj(L.skin, -38), skinL = adj(L.skin, 14), skinM = adj(L.skin, -18);
+  const coatL = adj(L.coat, 16), coatD = adj(L.coat, -26), coat2D = adj(L.coat2, -22), skinD = adj(L.skin, -38), skinL = adj(L.skin, 14), skinM = adj(L.skin, -18);
   const pantsL = adj(L.pants, 18), pantsD = adj(L.pants, -14), browC = adj(L.hair, -34), lip = '#a25a52', white = '#f4f0e8', lash = '#2a1c1a';
-  const iris = EYES[hash(L.skin + L.coat) % EYES.length], irisL = adj(iris, 44), irisD = adj(iris, -40);
+  const iris = EYES[hash(L.skin + L.coat) % EYES.length], irisL = adj(iris, 46), irisD = adj(iris, -42);
   const boots = '#17110e', bootL = '#3a2f29', sole = '#050403', shirt = adj(L.coat2, 36), lace = '#6a5a4c';
   const isGun = WEAPON[weapon]?.art?.kind === 'gun';
   const hairStage = (draw) => { rec.before = c.getImageData(0, 0, SW, SH).data; draw(); rec.after = c.getImageData(0, 0, SW, SH).data; };
-  const eye = (x, y) => { D(lash, x, y, 3, 1); D(irisD, x, y + 1, 3, 1); D(iris, x + 1, y + 1, 2, 1); D(white, x, y + 1, 1, 1); D(irisL, x, y + 2, 3, 1); D(iris, x + 1, y + 2, 1, 1); };
-  const headBase = (x0) => { D(L.skin, x0 + 1, 6, 10, 1); D(L.skin, x0, 7, 12, 10); D(L.skin, x0 + 1, 17, 10, 1); D(skinD, x0 + 1, 17, 10, 1); D(skinD, x0 + 11, 8, 1, 9); D(skinL, x0 + 1, 7, 2, 1); };
+  // 큰 눈(4×5): 눈꺼풀 선 · 어두운 윗부분 · 반짝임 · 밝은 아랫부분
+  const eye = (x, y) => { D(lash, x, y, 4, 1); D(irisD, x, y + 1, 1, 3); D(irisD, x + 1, y + 1, 3, 1); D(white, x + 1, y + 1, 1, 1); D(iris, x + 1, y + 2, 3, 1); D(iris, x, y + 3, 4, 1); D(irisL, x + 1, y + 4, 2, 1); D(irisL, x + 3, y + 3, 1, 1); };
+  const headBase = () => { D(L.skin, 10, 7, 12, 1); D(L.skin, 8, 8, 16, 12); D(L.skin, 9, 20, 14, 1); D(L.skin, 10, 21, 12, 1); D(skinD, 22, 9, 2, 11); D(skinD, 21, 20, 1, 1); D(skinD, 10, 21, 12, 1); D(skinL, 8, 9, 2, 6); D(skinD, 9, 11, 14, 2); };
 
   if (dir === 'down' || dir === 'up') {
     const back = dir === 'up';
     if (wings && !back) drawWings(r, 'down', frame);
     const l2 = lift === 1 ? 2 : 0, r2 = lift === -1 ? 2 : 0;
-    // 다리 + 부츠
-    D(L.pants, 10, 32 - l2, 6, 9); D(L.pants, 16, 32 - r2, 6, 9);
-    D(pantsL, 10, 33 - l2, 1, 8); D(pantsL, 16, 33 - r2, 1, 8); D(pantsD, 15, 33 - l2, 1, 8); D(pantsD, 21, 33 - r2, 1, 8); D(pantsL, 11, 37 - l2, 3, 1); D(pantsL, 17, 37 - r2, 3, 1); D(pantsD, 12, 35 - l2, 1, 2); D(pantsD, 18, 35 - r2, 1, 2);
-    D(boots, 10, 40 - l2, 6, 4); D(boots, 16, 40 - r2, 6, 4); D(bootL, 10, 40 - l2, 6, 1); D(bootL, 10, 41 - l2, 2, 1); D(bootL, 16, 41 - r2, 2, 1); D(sole, 10, 43 - l2, 6, 1); D(sole, 16, 43 - r2, 6, 1);
-    if (!back) { D(lace, 12, 41 - l2, 2, 1); D(lace, 18, 41 - r2, 2, 1); }
+    // 다리(바지 → 부츠)
+    D(L.pants, 11, 33 - l2, 5, 7); D(L.pants, 16, 33 - r2, 5, 7);
+    D(pantsL, 11, 34 - l2, 1, 6); D(pantsL, 16, 34 - r2, 1, 6); D(pantsD, 15, 34 - l2, 1, 6); D(pantsD, 20, 34 - r2, 1, 6); D(pantsL, 12, 37 - l2, 3, 1); D(pantsL, 17, 37 - r2, 3, 1); D(pantsD, 13, 35 - l2, 1, 2); D(pantsD, 18, 35 - r2, 1, 2);
+    D(boots, 11, 40 - l2, 5, 4); D(boots, 16, 40 - r2, 5, 4); D(bootL, 11, 40 - l2, 5, 1); D(bootL, 11, 41 - l2, 2, 1); D(bootL, 16, 41 - r2, 2, 1); D(sole, 11, 43 - l2, 5, 1); D(sole, 16, 43 - r2, 5, 1);
+    if (!back) { D(lace, 13, 41 - l2, 2, 1); D(lace, 18, 41 - r2, 2, 1); }
     // 몸통
-    D(L.coat, 9, 19, 14, 1); D(L.coat, 8, 20, 16, 14); D(coatL, 9, 19, 5, 1); D(coatL, 8, 20, 2, 9); D(coatD, 22, 20, 2, 13); D(coatD, 8, 33, 16, 1);
-    D(L.coat2, 8, 32, 16, 2); D(coat2D, 8, 33, 16, 1); D('#16110e', 8, 28, 16, 2); D('#2c241d', 8, 28, 16, 1);
-    D('#c9a24a', 15, 28, 2, 2); D('#6e5a2a', 16, 29, 1, 1); D('#f0d48a', 15, 28, 1, 1);
+    D(L.coat, 10, 22, 12, 1); D(L.coat, 9, 23, 14, 10); D(coatL, 10, 22, 4, 1); D(coatL, 9, 23, 2, 7); D(coatD, 21, 23, 2, 10); D(coatD, 9, 32, 14, 1);
+    D(L.coat2, 9, 31, 14, 2); D(coat2D, 9, 32, 14, 1); D('#16110e', 9, 29, 14, 2); D('#2c241d', 9, 29, 14, 1);
+    D('#c9a24a', 15, 29, 2, 2); D('#6e5a2a', 16, 30, 1, 1); D('#f0d48a', 15, 29, 1, 1);
     if (!back) {
-      D(shirt, 13, 19, 6, 2); D(shirt, 14, 21, 4, 3); D(shirt, 15, 24, 2, 4); D(adj(shirt, -40), 14, 21, 1, 3); D(adj(shirt, -40), 15, 24, 1, 4);   // 안쪽 셔츠(V넥)
-      D(accent, 15, 25, 2, 3); D(adj(accent, 40), 15, 25, 1, 1); D(coat2D, 13, 21, 1, 7); D(coat2D, 18, 21, 1, 7);   // 부서 표식 · 겉옷 안단
-      D(coatD, 10, 25, 4, 1); D(coatL, 10, 24, 4, 1); D(coatD, 18, 25, 4, 1); D(coatL, 18, 24, 4, 1); D(coat2D, 10, 24, 1, 2); D(coat2D, 21, 24, 1, 2);   // 가슴 주머니
+      D(shirt, 13, 22, 6, 2); D(shirt, 14, 24, 4, 3); D(shirt, 15, 27, 2, 2); D(adj(shirt, -40), 14, 24, 1, 3); D(adj(shirt, -40), 15, 27, 1, 2); D(coat2D, 13, 24, 1, 5); D(coat2D, 18, 24, 1, 5);
+      D(accent, 15, 25, 2, 2); D(adj(accent, 40), 15, 25, 1, 1);
+      D(coatD, 10, 27, 3, 1); D(coatL, 10, 26, 3, 1); D(coatD, 19, 27, 3, 1); D(coatL, 19, 26, 3, 1);
     } else {
-      D(coat2D, 15, 20, 2, 12); D(coatD, 11, 21, 1, 7); D(coatD, 20, 21, 1, 7); D(accent, 15, 22, 2, 2); D(coatL, 9, 19, 14, 1); D(L.coat2, 9, 20, 14, 1);
+      D(coat2D, 15, 23, 2, 8); D(coatD, 11, 24, 1, 5); D(coatD, 20, 24, 1, 5); D(accent, 15, 24, 2, 2); D(coatL, 10, 23, 12, 1);
     }
-    if (L.extra === 'vest') { D('#26221f', 10, 21, 12, 9); D('#3a342e', 10, 25, 4, 4); D('#3a342e', 18, 25, 4, 4); D('#4a443c', 10, 25, 4, 1); D('#4a443c', 18, 25, 4, 1); D('#14110e', 15, 21, 2, 8); }
-    if (L.extra === 'scarf') { D(adj(L.coat2, 40), 10, 19, 12, 4); D(adj(L.coat2, 20), 10, 22, 12, 1); D(adj(L.coat2, 56), 10, 19, 12, 1); }
+    if (L.extra === 'vest') { D('#26221f', 11, 23, 10, 8); D('#3a342e', 11, 26, 3, 3); D('#3a342e', 18, 26, 3, 3); D('#4a443c', 11, 26, 3, 1); D('#4a443c', 18, 26, 3, 1); D('#14110e', 15, 23, 2, 7); }
+    if (L.extra === 'scarf') { D(adj(L.coat2, 40), 10, 21, 12, 4); D(adj(L.coat2, 20), 10, 24, 12, 1); D(adj(L.coat2, 56), 10, 21, 12, 1); }
     // 팔(소매 · 커프스 · 손)
     const al = lift === 1 ? 2 : 0, ar = lift === -1 ? 2 : 0, arm = (x, off, left) => {
-      D(L.coat, x, 20 + off, 3, 9); D(left ? coatL : coatD, left ? x : x + 2, 20 + off, 1, 9); D(left ? coatD : coatL, left ? x + 2 : x, 21 + off, 1, 8);
-      D(L.coat2, x, 28 + off, 3, 1); D(coat2D, x, 29 + off, 3, 1);
-      D(L.skin, x, 30 + off, 3, 4); D(skinD, x, 32 + off, 3, 1); D(skinD, left ? x + 2 : x, 30 + off, 1, 3); D(skinL, left ? x : x + 2, 30 + off, 1, 2); D(skinM, x + 1, 33 + off, 1, 1);
-      D(accent, x, 23 + off, 3, 2); D(adj(accent, 36), x, 23 + off, 3, 1);
+      D(L.coat, x, 23 + off, 3, 8); D(left ? coatL : coatD, left ? x : x + 2, 23 + off, 1, 8); D(left ? coatD : coatL, left ? x + 2 : x, 24 + off, 1, 7);
+      D(L.coat2, x, 30 + off, 3, 1); D(coat2D, x, 31 + off, 3, 1);
+      D(L.skin, x, 31 + off, 3, 4); D(skinD, x, 34 + off, 3, 1); D(skinD, left ? x + 2 : x, 32 + off, 1, 2); D(skinL, left ? x : x + 2, 31 + off, 1, 2); D(skinM, x + 1, 33 + off, 1, 1);
+      D(accent, x, 25 + off, 3, 2); D(adj(accent, 36), x, 25 + off, 3, 1);
     };
-    arm(5, al, true); arm(24, ar, false);
+    arm(6, al, true); arm(23, ar, false);
     if (wings && back) drawWings(r, 'up', frame);
     // 머리
-    headBase(10); D(skinD, 14, 18, 4, 1);
-    if (back) D(skinD, 11, 16, 10, 1);
+    headBase(); D(skinD, 13, 21, 6, 1);
     hairStage(() => drawHair(r, back ? 'up' : 'down', L.hairStyle, L.hair, L.hair2));
     if (!back) {
-      D(skinD, 10, 12, 12, 1); D(L.skin, 9, 14, 1, 3); D(L.skin, 22, 14, 1, 3); D(skinD, 9, 15, 1, 1); D(skinD, 22, 15, 1, 1);          // 앞머리 그림자 · 귀
-      eye(11, 13); eye(18, 13); D(browC, 11, 12, 3, 1); D(browC, 18, 12, 3, 1);
-      D(skinD, 15, 15, 2, 1); D(lip, 15, 16, 2, 1); D('rgba(224,110,100,.40)', 10, 16, 2, 1); D('rgba(224,110,100,.40)', 20, 16, 2, 1);
-      if (L.extra === 'mask') D('#d9d6cf', 10, 14, 12, 4);
-      if (L.extra === 'glasses') { D('#1c1c20', 10, 13, 12, 1); D('#1c1c20', 14, 14, 4, 1); D('rgba(150,200,225,.55)', 11, 14, 3, 2); D('rgba(150,200,225,.55)', 18, 14, 3, 2); D('#e8f6ff', 11, 14, 1, 1); D('#e8f6ff', 18, 14, 1, 1); }
-    }
-    hat(r, 'v', back, L, accent, coatL);
+      D(L.skin, 7, 14, 1, 4); D(skinD, 7, 15, 1, 2); D(L.skin, 24, 14, 1, 4); D(skinD, 24, 15, 1, 2);       // 귀
+      eye(10, 13); eye(18, 13); D(browC, 10, 12, 4, 1); D(browC, 18, 12, 4, 1);
+      D(skinD, 15, 18, 2, 1); D(lip, 15, 19, 2, 1); D('rgba(224,110,100,.42)', 9, 18, 2, 1); D('rgba(224,110,100,.42)', 21, 18, 2, 1);
+      if (L.extra === 'mask') D('#d9d6cf', 9, 18, 14, 4);
+      if (L.extra === 'glasses') { D('#1c1c20', 9, 12, 6, 1); D('#1c1c20', 17, 12, 6, 1); D('#1c1c20', 9, 18, 6, 1); D('#1c1c20', 17, 18, 6, 1); D('#1c1c20', 9, 13, 1, 5); D('#1c1c20', 14, 13, 1, 5); D('#1c1c20', 17, 13, 1, 5); D('#1c1c20', 22, 13, 1, 5); D('#1c1c20', 15, 14, 2, 1); D('rgba(150,200,225,.30)', 10, 13, 4, 5); D('rgba(150,200,225,.30)', 18, 13, 4, 5); }
+    } else D(skinD, 10, 20, 12, 1);
+    hatNative(D, back ? 'up' : 'down', L, accent, coatL);
     drawWeapon(r, back ? 'up' : 'down', weapon);
     if (isGun) gunHand(r, back ? 'up' : 'down', L, skinD, weapon);
   } else {
@@ -114,37 +114,50 @@ function drawInner(c, dir, frame, L0, accent, weapon, wings, rec) {
     if (!right) { c.translate(16, 0); c.scale(-1, 1); }
     if (wings) drawWings(r, 'side', frame);
     const f1 = lift === 1 ? 2 : lift === -1 ? -2 : 0;
-    // 다리 + 부츠 (옆모습: 뒷다리 → 앞다리)
-    D(pantsD, 12 + f1, 32, 4, 9); D(L.pants, 16 - f1, 32, 4, 9); D(pantsL, 16 - f1, 33, 1, 8); D(pantsL, 17 - f1, 37, 2, 1); D(pantsD, 19 - f1, 33, 1, 8);
-    D(boots, 12 + f1, 40, 5, 4); D(boots, 16 - f1, 40, 6, 4); D(bootL, 16 - f1, 40, 6, 1); D(bootL, 19 - f1, 41, 2, 1); D(sole, 12 + f1, 43, 5, 1); D(sole, 16 - f1, 43, 6, 1); D(lace, 18 - f1, 41, 1, 1);
+    // 다리(뒷다리 → 앞다리)
+    D(pantsD, 12 + f1, 33, 4, 7); D(L.pants, 16 - f1, 33, 4, 7); D(pantsL, 16 - f1, 34, 1, 6); D(pantsL, 17 - f1, 37, 2, 1); D(pantsD, 19 - f1, 34, 1, 6); D(pantsD, 14 + f1, 35, 1, 2);
+    D(boots, 12 + f1, 40, 4, 4); D(boots, 16 - f1, 40, 5, 4); D(bootL, 16 - f1, 40, 5, 1); D(bootL, 18 - f1, 41, 2, 1); D(sole, 12 + f1, 43, 4, 1); D(sole, 16 - f1, 43, 5, 1); D(lace, 17 - f1, 41, 1, 1);
     // 몸통(옆)
-    D(L.coat, 11, 19, 10, 1); D(L.coat, 10, 20, 12, 14); D(coatL, 17, 19, 4, 1); D(coatL, 20, 20, 2, 8); D(coatD, 10, 20, 2, 13); D(coatD, 10, 33, 12, 1);
-    D(L.coat2, 10, 32, 12, 2); D(coat2D, 10, 33, 12, 1); D('#16110e', 10, 28, 12, 2); D('#2c241d', 10, 28, 12, 1); D('#c9a24a', 19, 28, 2, 2); D('#6e5a2a', 20, 29, 1, 1);
-    D(coatD, 13, 21, 1, 8);
-    if (L.extra === 'vest') { D('#26221f', 12, 21, 8, 9); D('#3a342e', 16, 25, 4, 4); D('#4a443c', 16, 25, 4, 1); }
-    if (L.extra === 'scarf') { D(adj(L.coat2, 40), 12, 19, 10, 4); D(adj(L.coat2, 56), 12, 19, 10, 1); }
-    // 앞쪽 팔(가려진 반대 팔은 몸통 뒤라 생략)
-    D(L.coat, 14 + f1, 20, 4, 9); D(coatL, 14 + f1, 20, 1, 9); D(coatD, 17 + f1, 21, 1, 8); D(L.coat2, 14 + f1, 28, 4, 1); D(coat2D, 14 + f1, 29, 4, 1); D(accent, 14 + f1, 23, 4, 2); D(adj(accent, 36), 14 + f1, 23, 4, 1);
-    D(L.skin, 14 + f1, 30, 4, 4); D(skinD, 14 + f1, 32, 4, 1); D(skinD, 17 + f1, 30, 1, 3); D(skinL, 14 + f1, 30, 1, 2); D(skinM, 15 + f1, 33, 2, 1);
+    D(L.coat, 11, 22, 10, 1); D(L.coat, 10, 23, 12, 10); D(coatL, 17, 22, 4, 1); D(coatL, 20, 23, 2, 6); D(coatD, 10, 23, 2, 10); D(coatD, 10, 32, 12, 1);
+    D(L.coat2, 10, 31, 12, 2); D(coat2D, 10, 32, 12, 1); D('#16110e', 10, 29, 12, 2); D('#2c241d', 10, 29, 12, 1); D('#c9a24a', 19, 29, 2, 2); D('#6e5a2a', 20, 30, 1, 1);
+    D(coatD, 13, 24, 1, 6);
+    if (L.extra === 'vest') { D('#26221f', 12, 23, 8, 8); D('#3a342e', 16, 26, 4, 3); D('#4a443c', 16, 26, 4, 1); }
+    if (L.extra === 'scarf') { D(adj(L.coat2, 40), 12, 21, 10, 4); D(adj(L.coat2, 56), 12, 21, 10, 1); }
+    // 앞쪽 팔
+    D(L.coat, 14 + f1, 23, 4, 8); D(coatL, 14 + f1, 23, 1, 8); D(coatD, 17 + f1, 24, 1, 7); D(L.coat2, 14 + f1, 30, 4, 1); D(coat2D, 14 + f1, 31, 4, 1); D(accent, 14 + f1, 25, 4, 2); D(adj(accent, 36), 14 + f1, 25, 4, 1);
+    D(L.skin, 14 + f1, 31, 4, 4); D(skinD, 14 + f1, 34, 4, 1); D(skinD, 17 + f1, 32, 1, 2); D(skinL, 14 + f1, 31, 1, 2); D(skinM, 15 + f1, 33, 2, 1);
     // 머리(옆)
-    headBase(10); D(skinD, 14, 18, 4, 1);
+    headBase(); D(skinD, 13, 21, 6, 1);
     hairStage(() => drawHair(r, 'side', L.hairStyle, L.hair, L.hair2));
-    D(skinD, 10, 12, 12, 1); D(L.skin, 22, 15, 1, 2); D(skinD, 22, 16, 1, 1);                                              // 앞머리 그림자 · 코
-    D(skinD, 13, 14, 2, 3); D(skinM, 13, 14, 2, 1); D(skin2(L), 14, 15, 1, 1);                                              // 귀
-    eye(17, 13); D(browC, 17, 12, 4, 1); D(lip, 19, 16, 2, 1); D('rgba(224,110,100,.40)', 17, 16, 2, 1);
-    if (L.extra === 'mask') D('#d9d6cf', 16, 14, 6, 4);
-    if (L.extra === 'glasses') { D('#1c1c20', 16, 13, 6, 1); D('rgba(150,200,225,.55)', 17, 14, 3, 2); D('#e8f6ff', 17, 14, 1, 1); }
-    hat(r, 's', false, L, accent, coatL);
+    D(L.skin, 24, 16, 1, 2); D(skinD, 24, 18, 1, 1);                                                             // 코
+    D(skinD, 12, 14, 3, 4); D(skinM, 12, 14, 3, 1); D(adj(L.skin, -58), 13, 15, 1, 2);                         // 귀
+    eye(18, 13); D(browC, 18, 12, 5, 1); D(lip, 21, 19, 2, 1); D('rgba(224,110,100,.42)', 18, 18, 2, 1);
+    if (L.extra === 'mask') D('#d9d6cf', 16, 18, 8, 4);
+    if (L.extra === 'glasses') { D('#1c1c20', 17, 12, 6, 1); D('#1c1c20', 17, 18, 6, 1); D('#1c1c20', 17, 13, 1, 5); D('#1c1c20', 22, 13, 1, 5); D('rgba(150,200,225,.30)', 18, 13, 4, 5); D('#1c1c20', 12, 13, 5, 1); }
+    hatNative(D, 'side', L, accent, coatL);
     drawWeapon(r, 'side', weapon);
     if (isGun) gunHand(r, 'side', L, skinD, weapon);
     c.restore();
   }
 }
-const skin2 = (L) => adj(L.skin, -58);
+
+// 모자·장비(머리에 얹는 것). 머리 상자 x8..23 · y4..21 기준, 앞/뒤/옆(오른쪽 보기)을 각각 직접 그린다.
+function hatNative(D, view, L, accent, coatL) {
+  const side = view === 'side', back = view === 'up', c2 = L.coat2, c2L = adj(c2, 22), c2D = adj(c2, -22);
+  switch (L.hat) {
+    case 'cap': D(c2, 8, 2, 16, 6); D(c2L, 9, 2, 12, 1); D(c2D, 8, 7, 16, 1); D(c2L, 8, 3, 2, 3); if (!back) D('#0f0b09', side ? 17 : 8, 8, side ? 9 : 16, 1); if (side) D('#17110e', 21, 7, 5, 1); break;
+    case 'beret': D('#3a1f24', 7, 3, 17, 5); D('#4b2a30', 9, 1, 13, 3); D('#5a3038', 10, 1, 6, 1); D('#2a1418', 7, 7, 17, 1); D('#3a1f24', side ? 7 : 6, 5, 2, 5); break;
+    case 'helm': D('#3b4036', 7, 1, 18, 8); D('#565d4d', 9, 1, 14, 2); D('#2a2e27', 7, 8, 18, 1); D(accent, 7, 8, 18, 1); D('#6e7762', 10, 3, 4, 1); if (!back) D('#2a2e27', 8, 9, 2, 3); break;
+    case 'hood': D(c2, 7, 2, 18, 6); D(c2L, 9, 2, 14, 1); D(c2, 7, 8, 2, 13); D(c2, 23, 8, 2, 13); D(c2D, 7, 18, 2, 3); D(c2D, 23, 18, 2, 3); if (back) D(c2, 8, 8, 16, 12); break;
+    case 'headset': D('#202226', 9, 3, 14, 1); D('#2e3136', 9, 4, 1, 8); D('#2e3136', 22, 4, 1, 8); D('#202226', 6, 12, 3, 6); D('#202226', 23, 12, 3, 6); D(accent, 6, 14, 1, 2); D(accent, 25, 14, 1, 2); if (!back && !side) D('#202226', 9, 19, 5, 1); if (side) D('#202226', 12, 12, 3, 6); break;
+    case 'goggles': D('#202226', 8, 10, 16, 1); if (!side) { D('#3a4a52', 10, 8, 5, 4); D('#3a4a52', 17, 8, 5, 4); D('#7fa3b5', 11, 9, 3, 2); D('#7fa3b5', 18, 9, 3, 2); D('#d6ecf4', 11, 9, 1, 1); D('#d6ecf4', 18, 9, 1, 1); } else { D('#3a4a52', 16, 8, 6, 4); D('#7fa3b5', 17, 9, 4, 2); D('#d6ecf4', 17, 9, 1, 1); } break;
+    default: break;
+  }
+}
 
 // 총을 쥔 손: 총기 손잡이 위로 손바닥·엄지·손가락 마디를 반 칸 단위로 덮는다. (손은 방향마다 총 도안의 손 위치와 같은 곳)
 function gunHand(r, view, L, skinD, weapon) {
-  const hy = 15, hx = gunHandX(WEAPON[weapon], view), dir = view === 'up' ? -1 : 1, X = (x, w = 1) => (dir > 0 ? hx + x : hx + 1 - x - w);
+  const hy = 15.5, hx = gunHandX(WEAPON[weapon], view), dir = view === 'up' ? -1 : 1, X = (x, w = 1) => (dir > 0 ? hx + x : hx + 1 - x - w);
   r(L.skin, X(0), hy - 0.5, 1, 1.5); r(skinD, X(0), hy + 0.5, 1, 0.5);                // 손등/손바닥
   r(L.skin, X(1, 0.5), hy, 0.5, 1); r(skinD, X(1, 0.5), hy + 0.5, 0.5, 0.5);            // 방아쇠울 앞 손가락
   r(adj(L.skin, 16), X(0), hy - 0.5, 0.5, 0.5); r(adj(L.skin, 10), X(1, 0.5), hy - 0.5, 0.5, 0.5);   // 엄지 · 반사광
@@ -163,7 +176,7 @@ function drawCell(c, dir, frame, L, accent, weapon, wings) {
 function finish(c, rec, W = SW, H = SH) {
   const SW = W, SH = H;
   const img = c.getImageData(0, 0, SW, SH), d = img.data, src = new Uint8ClampedArray(d), opaque = (x, y) => x >= 0 && y >= 0 && x < SW && y < SH && src[(y * SW + x) * 4 + 3] > 127;
-  const hair = rec.before && rec.after ? (x, y) => { const i = (y * SW + x) * 4; return rec.after[i + 3] > 127 && (rec.before[i] !== rec.after[i] || rec.before[i + 1] !== rec.after[i + 1] || rec.before[i + 2] !== rec.after[i + 2] || rec.before[i + 3] !== rec.after[i + 3]) && src[i] === rec.after[i] && src[i + 1] === rec.after[i + 1] && src[i + 2] === rec.after[i + 2]; } : () => false;
+  const hair = () => false;   // 머리카락 광택·그림자는 hair3.js 가 직접 칠한다
   const mix = (i, t, to) => { for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, src[i + k] + (to - src[i + k]) * t)); };
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
     const i = (y * SW + x) * 4;
@@ -181,19 +194,6 @@ function finish(c, rec, W = SW, H = SH) {
     }
   }
   c.putImageData(img, 0, 0);
-}
-
-function hat(r, view, back, L, accent, coatL) {
-  const side = view === 's';
-  switch (L.hat) {
-    case 'cap': r(L.coat2, 5, 2, 6, 2); r(coatL, 5, 2, 6, 1); if (!back) r('#0f0b09', side ? 9 : 5, 4, side ? 3 : 6, 1); break;
-    case 'beret': r('#3a1f24', 4, 2, 7, 2); r('#4b2a30', 5, 2, 5, 1); r('#3a1f24', side ? 5 : 4, 3, 2, 2); break;
-    case 'helm': r('#3b4036', 4, 2, 8, 3); r('#565d4d', 5, 2, 6, 1); r(accent, 4, 4, 8, 1); break;
-    case 'hood': r(L.coat2, 4, 2, 8, 2); r(L.coat2, 4, 3, 1, 6); r(L.coat2, 11, 3, 1, 6); if (back) r(L.coat2, 4, 3, 8, 6); break;
-    case 'headset': r('#202226', 5, 2, 6, 1); r('#202226', 4, 5, 1, 3); r('#202226', 11, 5, 1, 3); r(accent, 4, 6, 1, 1); if (!back && !side) r('#202226', 5, 8, 2, 1); break;
-    case 'goggles': r('#202226', 5, 4, 6, 1); r('#7fa3b5', 6, 3, 2, 2); r('#7fa3b5', 8, 3, 2, 2); r('#b9d3df', 6, 3, 1, 1); break;
-    default: break;
-  }
 }
 
 const hasWings = (u) => !!u.ab && u.ab.includes('dragon');
