@@ -119,9 +119,9 @@ await t('성공 확률: 같은 부서·높은 스탯이 더 높고 범위 [0.05,
   assert.ok(a > b); for (const u of s.units) for (const m of MISSIONS) { const p = successChance(u, m); assert.ok(p >= 0.05 && p <= 0.97); }
 });
 
-await t('커스터마이징 데이터: 머리 남/여 24개, 무기 13종, 특성 20/20/20, 능력 5, 스탯 6', () => {
+await t('커스터마이징 데이터: 머리 남/여 24개, 무기 19종, 특성 20/20/20, 능력 5, 스탯 6', () => {
   assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 24);
-  assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '서리 대검', '배틀엑스']);
+  assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '서리 대검', '배틀엑스', '권총', '기관단총', '기관총', '저격총', '로켓 런처', '박격포']);
   for (const r of ['c', 'r', 'l']) assert.equal(TRAITS.filter((x) => x.rarity === r).length, 20, r);
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && x.bad).length >= 3, '순수하게 나쁜 전설 특성');
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && !x.bad).length >= 10, '좋은 전설 특성도 존재');
@@ -434,12 +434,12 @@ await t('공방 무기: 3개 공방 × 12종류 × 5개 = 60개(공방별 20개)
   assert.equal(WORKSHOP_WEAPONS.length, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.id)).size, 60); assert.equal(new Set(WORKSHOP_WEAPONS.map((w) => w.name)).size, 60, '이름 고유');
   assert.ok(WORKSHOP_WEAPONS.every((w) => !('tier' in w) && !/Mk\./.test(w.name + w.desc)), '티어/Mk 표기 없음');
   for (const wk of WORKSHOPS) assert.equal(WORKSHOP_WEAPONS.filter((w) => w.workshop === wk.id).length, 20, wk.id);
-  const types = WEAPONS.filter((w) => w.id !== 'frostblade'); assert.equal(types.length, 12);
+  const types = WEAPONS.filter((w) => w.id !== 'frostblade' && !w.gun); assert.equal(types.length, 12, '공방 종류는 근접 12종(서리 대검·총기 제외)');
   for (const ty of types) {
     const set = WORKSHOP_WEAPONS.filter((w) => w.base === ty.id); assert.equal(set.length, 5, ty.id); assert.ok(new Set(set.map((w) => w.workshop)).size >= 2, '한 종류의 5개는 여러 공방에 걸쳐 있다');
     const by = set.slice().sort((a, b) => a.pw - b.pw); for (let i = 1; i < 5; i++) assert.ok(by[i].pw >= by[i - 1].pw && by[i].fee >= by[i - 1].fee && by[i].upkeep >= by[i - 1].upkeep, `${ty.id} 강한 무기일수록 비용이 높다`);
   }
-  assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade'), '서리 대검은 공방 종류가 아님');
+  assert.ok(!WORKSHOP_WEAPONS.some((w) => w.base === 'frostblade' || WEAPON[w.base]?.gun), '서리 대검·총기는 공방 종류가 아님');
   for (const w of WORKSHOP_WEAPONS) { assert.ok(w.fee >= 2000 && w.upkeep >= 100 && w.name && w.desc && WEAPON[w.id] === w && w.pw >= 1 && w.pw <= 5); assert.ok(Object.values(w.fx).every((v) => typeof v === 'boolean' || Number.isFinite(v))); }
   // 공방 성향: 마그마=근력·한파 무시, 아크=기술·안개 무시·순찰 안전, 웨폰&아머=방어·부상 경감
   const top = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 5), low = (wid) => WORKSHOP_WEAPONS.find((w) => w.workshop === wid && w.pw === 1);
@@ -598,5 +598,25 @@ await t('용병 고용: 후보 풀·면접·고용·급여·상한·계약 해�
   const old = JSON.parse(JSON.stringify(snap)); delete old.recruits; delete old.rec; delete old.rseq; delete old.units[hh.id]; const os = new Sim(old, () => 0.5); assert.equal(os.units.length, 25); assert.equal(os.recruitView().cands.length, 4, '옛 저장에서도 후보가 새로 생긴다');
   // 옛 저장의 dayLog(hires/raids 없음)에도 안전
   const od = JSON.parse(JSON.stringify(snap)); delete od.dayLog.hires; delete od.dayLog.raids; delete od.dayLog.events; const ods = new Sim(od, () => 0.5); assert.ok(ods.interviewCandidate(ods.recruitView().cands.find((c) => !c.interviewed).id).ok); assert.equal(ods.buildReport(true).raids.length, 0);
+});
+await t('총기 6종: 권총·기관단총·기관총·저격총·로켓 런처·박격포 — 모양이 모두 다르고, 탄약비(유지비)·성능이 반영되며 습격에서 원거리/범위 공격', () => {
+  const GUNS = ['pistol', 'smg', 'mg', 'sniper', 'rocket', 'mortar']; assert.deepEqual(WEAPONS.filter((w) => w.gun).map((w) => w.id), GUNS); assert.deepEqual(GUNS.map((g) => WEAPON[g].name), ['권총', '기관단총', '기관총', '저격총', '로켓 런처', '박격포']);
+  for (const g of GUNS) { const w = WEAPON[g]; assert.ok(w.fx.upkeep > 0, g + ' 탄약비'); assert.ok(w.gun.range > 1.6 && w.gun.cd > 0 && w.gun.mul > 0, g + ' 전투 성능'); assert.ok(w.fx.skl >= 1 || w.fx.str >= 2, g + ' 능력치'); assert.ok(!w.workshop && !w.art); }
+  assert.ok(WEAPON.mortar.gun.range > WEAPON.sniper.gun.range && WEAPON.sniper.gun.range > WEAPON.mg.gun.range && WEAPON.mg.gun.range > WEAPON.smg.gun.range && WEAPON.smg.gun.range > WEAPON.pistol.gun.range, '사거리 순서');
+  assert.ok(WEAPON.rocket.gun.splash > 0 && WEAPON.mortar.gun.splash > 0 && !WEAPON.sniper.gun.splash, '범위 피해는 로켓·박격포'); assert.ok(WEAPON.sniper.gun.mul > WEAPON.rocket.gun.mul * 0.9 && WEAPON.sniper.gun.cd > WEAPON.mg.gun.cd, '저격은 한 발이 세고 느리다');
+  // 운영비: 착용하면 탄약비만큼 유지비가 늘어난다
+  const s = new Sim(null, () => 0.5), up0 = s.buildReport(true).upkeep; assert.ok(s.setWeapon('c04', 'mg').ok); assert.equal(s.buildReport(true).upkeep - up0, WEAPON.mg.fx.upkeep, '기관총 탄약비 220 CR'); assert.ok(s.byId.c04.fx.speed < 0);
+  assert.ok(s.setWeapon('c04', 'pistol').ok); assert.equal(s.buildReport(true).upkeep - up0, WEAPON.pistol.fx.upkeep); assert.ok(s.setWeapon('c04', 'battleaxe').ok); assert.equal(s.buildReport(true).upkeep, up0, '기본 무기로 바꾸면 탄약비 중단');
+  const sv = new Sim(JSON.parse(JSON.stringify((() => { const x = new Sim(null, () => 0.5); x.setWeapon('c05', 'sniper'); return x.serialize(); })())), () => 0.5); assert.equal(sv.byId.c05.weapon, 'sniper', '저장/복원');
+  // 습격: 사거리·연사·범위
+  const d = (id) => { const x = new Sim(null, () => 0.5); x.setWeapon('c06', id); return defenderFrom(x.byId.c06); };
+  assert.equal(d('battleaxe').range, 1.6); assert.equal(d('battleaxe').atkCd, 1.1); assert.equal(d('sniper').range, 9); assert.equal(d('sniper').atkCd, 2.4); assert.equal(d('mortar').splash, 2); assert.equal(d('pistol').atkMul, 0.8);
+  const solo = (g) => ({ ...d(g), id: 'x', dept: 'raider', leader: false, maxhp: 1000, hp: 1000 });
+  const sn = new RaidBattle({ defenders: [solo('sniper')], plan: { types: ['grunt'] }, day: 1, seed: 3 }), [SD, SE] = sn.units; SD.x = 3; SD.y = 4; SE.x = 11; SE.y = 4; SE.cd = 99; SD.cd = 0; sn.tick(0.1); assert.ok(SE.hp < SE.maxhp, '저격총은 8칸 밖에서도 쏜다'); assert.equal(SD.x, 3, '사거리 안에서는 다가가지 않는다');
+  const sp = new RaidBattle({ defenders: [solo('mortar')], plan: { types: ['grunt', 'grunt', 'grunt'] }, day: 1, seed: 3 }), [MD, M1, M2, M3] = sp.units; MD.x = 2; MD.y = 4; M1.x = 11; M1.y = 4; M2.x = 11.8; M2.y = 4.3; M3.x = 20; M3.y = 1; for (const e of [M1, M2, M3]) e.cd = 99; MD.cd = 0; sp.tick(0.1); assert.ok(M1.hp < M1.maxhp && M2.hp < M2.maxhp && M3.hp === M3.maxhp, '박격포: 주변만 맞는다');
+  const melee = new RaidBattle({ defenders: [solo('battleaxe')], plan: { types: ['grunt'] }, day: 1, seed: 3 }), [BD, BE] = melee.units; BD.x = 3; BD.y = 4; BE.x = 11; BE.y = 4; BE.cd = 99; BD.cd = 0; melee.tick(0.1); assert.equal(BE.hp, BE.maxhp, '근접은 8칸 밖에서 못 친다');
+  // 균형: 전원이 총기를 들어도 근접 전원과 비슷한 수준(극단적으로 강하거나 약하지 않다)
+  const seq = (seed) => { let a = seed; return () => { a = (a * 16807) % 2147483647; return a / 2147483647; }; }; const fight = (id) => { const x = new Sim(null, () => 0.5); for (const u of x.units) x.setWeapon(u.id, id); const all = x.units.slice(0, 15).map(defenderFrom); let w = 0; for (let i = 1; i <= 20; i++) if (new RaidBattle({ defenders: all, plan: planRaid(10, seq(i)), day: 10, seed: i }).finish().win) w++; return w; };
+  const base0 = fight('battleaxe'); for (const g of GUNS) { const w = fight(g); assert.ok(w >= base0 - 12 && w <= 20, `${g} 승리 ${w}/20 (근접 ${base0}/20)`); }
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);

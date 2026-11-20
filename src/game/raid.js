@@ -1,5 +1,6 @@
 // 긴급 습격: 무법자 무리가 기지를 덮치고, 그 시각 기지에 있는 병력이 맞서 싸운다. (순수 로직 — DOM 없음, 난수는 seed 로 결정)
 // 부서 특수 능력: 치료팀=치유 · 방어팀=밀치기 · 공격팀=강타 · 공중 지원팀=지원 사격 · 운송팀=방벽 · 의뢰 수행팀=교란 · 중요업무처리팀=작전 지휘(공격력 오라) · 습격팀=기습(첫 공격 2배)
+import { WEAPON } from './weapons.js';
 export const ARENA = { w: 24, h: 9 };
 export const RAID_CHANCE = { day: 0.01, night: 0.05 };          // 게임 시간 1시간마다 (아침 1% / 밤 5%)
 export const FORMATIONS = {
@@ -31,10 +32,10 @@ export function planRaid(day, rand) {
 
 /** 지휘실의 인원(Unit) → 전투 참가자 */
 export function defenderFrom(u) {
-  const lead = u.isLeader ? 1.2 : 1, dv = u.dv || { cmb: 50, def: 50, med: 40 }, fx = u.fx || {};
+  const lead = u.isLeader ? 1.2 : 1, dv = u.dv || { cmb: 50, def: 50, med: 40 }, fx = u.fx || {}, gun = WEAPON[u.weapon]?.gun || null;   // 총기는 사거리·연사·위력·범위 피해가 다르다
   const maxhp = (40 + dv.def / 1.5) * lead;
   return { id: u.id, name: u.name, dept: u.dept, leader: !!u.isLeader, atk: (6 + dv.cmb / 8 + (fx.str || 0) * 0.8 + (fx.skl || 0) * 0.4) * lead, def: dv.def, med: dv.med, cmb: dv.cmb,
-    maxhp, hp: maxhp * clamp(u.hp, 0, 100) / 100, range: u.dept === 'aerial' ? 6 : 1.6, spd: clamp(2.4 * (1 + (fx.speed || 0)), 1.2, 3.6) };
+    maxhp, hp: maxhp * clamp(u.hp, 0, 100) / 100, range: gun ? Math.max(gun.range, u.dept === 'aerial' ? 6 : 0) : u.dept === 'aerial' ? 6 : 1.6, atkCd: gun ? gun.cd : 1.1, atkMul: gun ? gun.mul : 1, splash: gun?.splash || 0, spd: clamp(2.4 * (1 + (fx.speed || 0)), 1.2, 3.6) };
 }
 
 export class RaidBattle {
@@ -45,7 +46,7 @@ export class RaidBattle {
     this.units = [];
     defenders.forEach((d, i) => this.units.push({ ...d, side: 'd', x: 2 + R() * 4, y: 1 + ((i * 1.7 + R()) % (ARENA.h - 2)), cd: R(), stun: 0, shield: 0, shieldT: 0, confuse: 0, first: d.dept === 'raider', abCd: 1 + R() * 3, dir: 'right', hit: 0 }));
     plan.types.forEach((ty, i) => { const T = ENEMY_TYPES[ty], hp = T.hp * lv; this.units.push({ id: `e${i}`, name: T.ko, type: ty, side: 'e', atk: T.dmg * (1 + day * 0.02), def: T.def, maxhp: hp, hp, range: T.range, spd: T.spd, atkCd: T.cd, x: ARENA.w - 3 + R() * 2, y: 1 + R() * (ARENA.h - 2), cd: R() * T.cd, stun: 0, shield: 0, shieldT: 0, confuse: 0, dir: 'left', hit: 0 }); });
-    for (const u of this.units) if (u.side === 'd') u.atkCd = 1.1;
+    for (const u of this.units) if (u.side === 'd') u.atkCd = u.atkCd || 1.1;
     this.start = { d: this.units.filter((u) => u.side === 'd').length, e: plan.types.length };
   }
   alive(side) { return this.units.filter((u) => u.side === side && u.hp > 0); }
@@ -80,7 +81,8 @@ export class RaidBattle {
 
   attack(a, t, mult = 1) {
     if (a.first) { mult *= 2; a.first = false; this.say(a.x, a.y, '기습!', 'skill'); }
-    this.damage(a, t, a.atk * mult);
+    const dmg = a.atk * mult * (a.atkMul || 1); this.damage(a, t, dmg);
+    if (a.splash) for (const f of this.units) if (f !== t && f.side === t.side && f.hp > 0 && Math.hypot(f.x - t.x, f.y - t.y) <= a.splash) this.damage(a, f, dmg * 0.6);   // 폭발: 주변 적에게도 피해
   }
   /** 방어력·진형·오라를 반영해 피해를 준다 */
   damage(a, t, raw) {

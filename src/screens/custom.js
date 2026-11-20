@@ -91,7 +91,7 @@ export function mountCustom(root, ctx, arg) {
     const u = U();
     const seg = h('div', { class: 'seg wk-seg', role: 'tablist', 'aria-label': '무기 분류' }, ...[['base', '기본 무기'], ...WORKSHOPS.map((x) => [x.id, x.short + ' 공방'])].map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(wtab === k), class: `seg-b ${wtab === k ? 'on' : ''}`, onclick: () => { wtab = k; Audio.sfx('click'); paintPanel(); } }, l)));
     if (wtab === 'base') return h('div', {}, seg, h('div', { class: 'grid wp-grid' }, ...WEAPONS.map((w) => h('button', { type: 'button', class: `card wp ${u.weapon === w.id ? 'on' : ''}`, 'aria-pressed': String(u.weapon === w.id), onclick: () => { sim.setWeapon(id, w.id); Audio.sfx('select'); changed(); } },
-      wIcon(w.id), h('b', {}, w.name), h('small', {}, w.desc), fxList(w.fx)))));
+      wIcon(w.id), h('b', {}, w.name), h('small', {}, w.desc), fxList(w.fx), w.gun ? h('small', { class: 'gun-line' }, `습격 전투: 사거리 ${w.gun.range} · 공격 간격 ${w.gun.cd}초${w.gun.splash ? ` · 범위 피해 ${w.gun.splash}` : ''}`) : null))));
     const wk = WORKSHOPS.find((x) => x.id === wtab), list = WORKSHOP_WEAPONS.filter((w) => w.workshop === wtab);
     return h('div', {}, seg,
       h('div', { class: 'wk-head', style: `--wk:${wk.color}` }, h('b', {}, wk.name), h('small', {}, wk.desc), h('p', { class: 'wk-fund' }, `보유 자금 ${fmtCredits(sim.funds)} · 착용할 때 착용비를 내고, 착용하는 동안 매일 유지비가 듭니다.`)),
