@@ -16,7 +16,7 @@ export function mountPanel(root, ctx) {
   const go = (hash) => () => { Audio.sfx('select'); ctx.go(hash); };
   const row = (no, title, sub, hash, extra = '') => h('button', { class: `mod ${extra}`, type: 'button', onclick: go(hash) },
     h('span', { class: 'mod-no' }, no), h('span', { class: 'mod-body' }, h('b', {}, title), h('small', {}, sub)), h('span', { class: 'mod-go', html: icon('arrow', 22) }));
-  const reportRow = row('07', '오늘의 보고서 올리기', '하루를 마감하고 보고서를 제출합니다 · 연구 포인트 +1', '#/panel/report', 'report');
+  const reportRow = row('08', '오늘의 보고서 올리기', '하루를 마감하고 보고서를 제출합니다 · 연구 포인트 +1', '#/panel/report', 'report');
 
   const day = h('span', { class: 'bignum' }), clock = h('span', { class: 'clockline' }), funds = h('b'), rep = h('b'), injured = h('b'), away = h('b');
   const envToday = h('b'), envNext = h('b'), envDesc = h('small'), snowFill = h('i'), snowTxt = h('span');
@@ -55,6 +55,7 @@ export function mountPanel(root, ctx) {
           row('04', '연구', '능력 해금 · 3배속 · 수입 증가', '#/panel/research'),
           row('05', '상점', '능력치 아이템 · 장비 · 소모품 · 가구 40종', '#/panel/shop'),
           row('06', '팀장 면담', '8개 부서 팀장과 대화 · 격려 · 지원', '#/panel/leader'),
+          row('07', '용병 모집', 'Rager 공격팀 용병 면접 · 고용 · 계약 해지', '#/panel/recruit'),
           reportRow)),
       h('aside', { class: 'hub-side' },
         env,
