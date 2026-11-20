@@ -2,6 +2,8 @@
 // 스타일마다 정수리·앞머리·옆머리·뒷머리·묶음을 픽셀 단위로 쌓고, 뿌리→끝 그라데이션 + 위쪽 광택 + 가닥 무늬 + 아래쪽 그림자를 칠한다.
 // 좌표는 몸 기준 실제 픽셀(논리 칸 ×2). P(색, x, y, w, h) 로 그린다.
 import { SHEET_HAIR } from './hair-sheets.js';
+import { SILVER_HAIR } from './hair-silver.js';
+SHEET_HAIR.e1 = SILVER_HAIR;   // 은발 원본: 사진 1 은발 걷기 시트에서 떼어 낸 도안(프레임별 위치 고정)
 const hex = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const toHex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 const shade = (c, d) => toHex(hex(c).map((v) => v + d));
@@ -163,14 +165,15 @@ export function hairGrid(view, style) {
 }
 
 /** P(색, x, y, w, h): 실제 픽셀 사각형. 뿌리 col → 끝 tip 그라데이션은 y 가 아래일수록 tip 에 가깝게. */
-const LV = [-66, -38, 0, 26, 54];   // 템플릿 도안의 명도 단계(0 외곽선 … 4 광택) → 머리색 기준 밝기 변화
+const LV = [-66, -38, 0, 26, 54], LV_SILVER = [-85, -26, 0, 50, 85];   // e1 은 원본 회색 단계(#555 #909090 #aaa #dcdcdc #fff)를 기본색 #aaaaaa 에서 그대로 재현   // 템플릿 도안의 명도 단계(0 외곽선 … 4 광택) → 머리색 기준 밝기 변화
 /** 템플릿 시트 도안: 머리 중앙 x16(옆모습 15.5)에 가로 중심을 맞추고 정수리 y3 에 윗면을 맞춘다. */
 function drawSheetHair(P, view, style, col, tip, box) {
-  const sp = SHEET_HAIR[style.sheet]?.[view]; if (!sp || !sp.length) return;
-  const w = Math.max(...sp.map((r) => r.length)), x0 = Math.round(((box ? box.x0 + box.x1 + 1 : 32) / 2) - w / 2) + (style.dx || 0), y0 = 3 + (box ? box.top - 5 : 0) + (style.dy || 0), c0 = hex(col), t0 = tip ? hex(tip) : null;
+  const sp = SHEET_HAIR[style.sheet]?.[view] || (view === 'sideL' ? SHEET_HAIR[style.sheet]?.side : null); if (!sp || !sp.length) return;
+  const anchored = style.anchored && box && box.ax !== undefined, LVs = style.anchored ? LV_SILVER : LV;
+  const w = Math.max(...sp.map((r) => r.length)), x0 = anchored ? box.ax : Math.round(((box ? box.x0 + box.x1 + 1 : 32) / 2) - w / 2) + (style.dx || 0), y0 = anchored ? box.ay : 3 + (box ? box.top - 5 : 0) + (style.dy || 0), c0 = hex(col), t0 = tip ? hex(tip) : null;
   sp.forEach((row, j) => {
     const y = y0 + j; if (y < 0 || y > 47) return;
-    const cell = (i) => { const ch = row[i]; if (ch === undefined || ch === '.') return null; const base = t0 ? (() => { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); return c0.map((v, k) => v + (t0[k] - v) * tt); })() : c0; return toHex(base.map((v) => v + LV[+ch])); };
+    const cell = (i) => { const ch = row[i]; if (ch === undefined || ch === '.') return null; const base = t0 ? (() => { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); return c0.map((v, k) => v + (t0[k] - v) * tt); })() : c0; return toHex(base.map((v) => v + LVs[+ch])); };
     let i = 0; while (i < row.length) { const c = cell(i); if (!c) { i++; continue; } let e = i; while (e + 1 < row.length && cell(e + 1) === c) e++; const xa = x0 + i, xb = x0 + e; if (xb >= 0 && xa <= 31) P(c, Math.max(0, xa), y, Math.min(31, xb) - Math.max(0, xa) + 1, 1); i = e + 1; }
   });
 }
