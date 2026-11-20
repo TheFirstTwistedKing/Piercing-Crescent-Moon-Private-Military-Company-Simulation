@@ -11,7 +11,8 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** 글자가 한 줄씩 나타나는 연출. 클릭하면 건너뛴다. 보조기기에는 전체 문장을 바로 읽어 준다. */
 function typeInto(el, text, done) {
   clearInterval(typer);
-  const full = h('span', { class: 'sr-only' }, text), vis = h('span', { 'aria-hidden': 'true' }); el.replaceChildren(full, vis);
+  // 보이지 않는 전체 문장(ghost)이 최종 높이를 미리 차지하고, 타이핑 글자(vis)는 그 위에 겹쳐 그린다 → 글자가 늘어도 창 크기가 변하지 않는다
+  const full = h('span', { class: 'sr-only' }, text), ghost = h('span', { class: 'ev-ghost', 'aria-hidden': 'true' }, text), vis = h('span', { class: 'ev-vis', 'aria-hidden': 'true' }); el.replaceChildren(full, ghost, vis);
   if (reduced()) { vis.textContent = text; done?.(); return; }
   let i = 0; const step = Math.max(1, Math.ceil(text.length / 70));
   const finish = () => { clearInterval(typer); vis.textContent = text; el.removeEventListener('pointerdown', finish); done?.(); };
