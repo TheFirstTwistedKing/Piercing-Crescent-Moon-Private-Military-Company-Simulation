@@ -45,7 +45,7 @@ export class Cv {
     for (let i = 0; i <= len; i++) {
       const t = i / len, wd = Math.max(1, Math.round(w * (1 - (o.taper ?? 0.5) * t))), sway = o.sway ? Math.round(Math.sin(i * (o.swayF ?? 0.5)) * o.sway) : 0, drift = Math.round((o.drift || 0) * t);
       for (let s = 0; s < wd; s++) {
-        const acc = (o.accTip !== undefined && t >= o.accTip) || (o.accMid && i % 4 === 2) ? 1 : 0, tie = i === 0 || i === len - 1 && !o.plain;
+        const acc = (o.accTip !== undefined && t >= o.accTip) || (o.accMid && i % 6 < 2 && i > 1) ? 1 : 0, tie = i === 0 || i === len - 1 && !o.plain;
         this.put(Math.round(x - wd / 2 + s + sway + drift), y + i, { layer: L, pos: wd > 1 ? (s / (wd - 1)) * 2 - 1 : 0, nx: 1, ny: 0, t, acc, kind: o.plain ? 'lock' : 'braid', bpat: (((i >> 1) & 1) ^ (s & 1)), tie });
       }
     }
