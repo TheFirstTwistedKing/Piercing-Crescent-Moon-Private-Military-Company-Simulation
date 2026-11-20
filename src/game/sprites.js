@@ -61,7 +61,7 @@ function bodyPalette(L, accent) {
     o: sk('#77432e'), O: sk('#572d1d'), s: sk('#f9d2a9'), l: sk('#ffebc6'), h: sk('#d88a64'),
     x: adj(eye, 52), u: adj(eye, -52), v: adj(eye, -22), y: adj(eye, 84), w: eye,
     F: co('#2c312a'), H: L.coat, K: co('#788372'), I: co('#909090'), G: co('#555555'),
-    B: '#0a0a0c', C: sleeve, c: pants, E: '#aaaaaa', D: '#dcdcdc', U: adj(accent, -70), V: adj(accent, -30), R: accent, r: adj(accent, -60),
+    B: '#0a0a0c', C: sleeve, c: pants, E: '#aaaaaa', D: '#dcdcdc', U: adj(accent, -70), V: adj(accent, -30), R: accent, r: adj(accent, -60), Q: adj(accent, 34),
   };
 }
 function drawBody(D, frameData, L, accent) {
@@ -86,7 +86,7 @@ function drawInner(c, wc, dir, frame, L, accent, weapon, wings, rec) {
   const fd = bodyFrame(dir === 'left' ? 'left' : view === 'side' ? 'right' : view, frame);
   drawBody(D, fd, L, accent);
   if (wings && view === 'up') drawWings(r, 'up', frame);
-  drawHair(r, view, L.hairStyle, L.hair, L.hair2, { x0: fd.ox + fd.head.x0, x1: fd.ox + fd.head.x1, top: fd.oy + fd.head.y0 });
+  drawHair(r, mirror ? 'sideL' : view, L.hairStyle, L.hair, L.hair2, { x0: fd.ox + fd.head.x0, x1: fd.ox + fd.head.x1, top: fd.oy + fd.head.y0, ax: fd.ox + fd.hair.x, ay: fd.oy + fd.hair.y });   // sideL: 왼쪽 보기 전용 도안(있는 스타일만)
   headGear(D, view, L, accent, fd);
   drawWeapon(rw, view, weapon);
   if (isGun) gunHand(rw, view, L, adj(L.skin, -38), weapon);

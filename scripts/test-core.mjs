@@ -528,11 +528,11 @@ await t('긴급 습격 정산: 승리=전리품·평판·사기, 패배=약탈·
   const d = new Sim(null, () => 0.5); d.raid.today = 2; d.nextDay(d.buildReport()); assert.equal(d.raid.today, 0);
 });
 await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
-  assert.equal(HAIR_STYLES.length, 78, '기본 48 + 헤어 템플릿 30'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 78); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 78, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 30, '템플릿 30종은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 24);
+  assert.equal(HAIR_STYLES.length, 79, '기본 48 + 헤어 템플릿 30 + 은발 원본 1'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 79); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 79, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 31, '템플릿 30종 + 은발 원본은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 24);
   const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 28); assert.equal(ext.filter((s) => s.g === 'm').length, 14); assert.equal(ext.filter((s) => s.g === 'f').length, 14);
   const cells = (id, view) => { const c = new Set(); drawHair((col, x, y, w, h) => { assert.ok(/^#[0-9a-f]{6}$/.test(col), id + ' 색 형식'); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) c.add(`${x + i},${y + j}`); }, view, id, '#808080'); return c; };
   const views = ['down', 'up', 'side'], diff = (a, b) => { let d = 0; for (const v of views) { const A = cells(a, v), B = cells(b, v); for (const c of A) if (!B.has(c)) d++; for (const c of B) if (!A.has(c)) d++; } return d; };
-  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 78, '78개 윤곽 모두 다름');
+  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 79, '79개 윤곽 모두 다름');
   for (const s of HAIR_STYLES) for (const v of views) { const m = cells(s.id, v); assert.ok(m.size > 0, s.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x <= 15.5 && y >= 0 && y <= 23.5, `${s.name} ${v} 범위 밖 ${c}`); } }
   for (const a of ext) for (const b of HAIR_STYLES) { if (a === b || a.g !== b.g) continue; assert.ok(diff(a.id, b.id) >= 12, `${a.name} / ${b.name} 윤곽 차이 ${diff(a.id, b.id)}px`); }
   // 색: 14 + 9, 모두 올바른 hex 이고 중복 없음, 모든 스타일이 모든 색으로 그려진다
