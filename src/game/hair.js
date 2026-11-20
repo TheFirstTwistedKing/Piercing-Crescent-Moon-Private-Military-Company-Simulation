@@ -68,6 +68,6 @@ export const HAIR_COLORS = ['#1c1a1f', '#3a2418', '#6b4a2b', '#8a5a34', '#c9a063
 
 /** 머리카락 그리기(2배 해상도 생성기 hair3.js): r(color, x, y, w, h) 는 논리 칸 좌표 — 내부에서 반 칸(실제 1픽셀) 단위로 나눠 호출한다.
     view: 'down' | 'up' | 'side'(오른쪽 보기; 왼쪽은 호출측에서 좌우반전). tip 이 있으면 뿌리→끝 그라데이션. */
-export function drawHair(r, view, id, col, tip = null) {
-  drawHair3((c, x, y, w, h) => r(c, x / 2, y / 2, w / 2, h / 2), view, HAIR[id] || HAIR.m1, col, tip);
+export function drawHair(r, view, id, col, tip = null, box = null) {
+  drawHair3((c, x, y, w, h) => r(c, x / 2, y / 2, w / 2, h / 2), view, HAIR[id] || HAIR.m1, col, tip, box);
 }

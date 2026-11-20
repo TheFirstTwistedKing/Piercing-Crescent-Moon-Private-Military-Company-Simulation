@@ -79,36 +79,149 @@ const upFrame = (frame) => {
   return [EMPTY, ...HEAD_UP, ...TORSO_UP, ...legs];
 };
 
-// 옆모습(오른쪽 보기, 21칸 폭): 머리 = 템플릿 머리의 뒤쪽 반(눈·눈썹 제거) + 앞쪽 반(눈 그대로) + 코, 몸통 = 겉옷 중앙 9칸, 팔 = 템플릿 오른팔, 다리 = 템플릿 다리
-const SW_ = 21;
-const SIDE_HEAD = HEAD_DOWN.map((row, i) => row.slice(2, 8).replace(/[xuvywhO]/g, (c) => (c === 'O' && i < 8 ? 'O' : 's')) + row.slice(8, 16));
-const up1 = (blk) => blk.map((r, i) => blk[i + 1] || '.'.repeat(r.length));   // 발을 한 칸 들어 올린 다리 블록
-// 옆모습 다리: 템플릿 왼쪽 다리의 정강이(30~37행)를 그대로 쓰고, 샌들은 앞쪽(오른쪽)으로만 나온다.
-const LEG_SIDE = [...LEGS_DOWN.slice(0, 8).map((r) => r.slice(2, 9).padEnd(10, '.')), 'BCCCCBBBB.', 'BCCCBsssso', 'BBBBBBBBBB'];
-// 옆모습 몸통: 목(앞쪽 피부) · 뒤통수 쪽으로 올라온 후드 깃 · 겉옷 중앙. 지퍼(I)는 앞쪽(오른쪽) 가장자리로 옮긴다.
-const TORSO_SIDE = [
-  '...OsssO...', '..FFOssOFF.', '.FIGFOooOFF', '.FHIFsssFKF', 'FIHKFsssHKF', 'FGKHHFhFHKF', 'FKHKHKHHHKF', 'FFIHIHKHIFF',
-  ...TORSO_DOWN.slice(8).map((r) => r.slice(3, 14).split('').map((ch, k) => (k === 5 && ch === 'I' ? 'H' : k === 9 && ch === 'H' ? 'I' : ch)).join('')),
-];
-const sideFrame = (frame) => {
-  const g = grid(SW_, 41), f1 = frame === 1 ? 2 : frame === 2 ? -2 : 0;
-  // 다리: 뒷다리 → 앞다리. 걸을 때는 크게 벌리고 뒷발을 든다.
-  if (frame === 0) { put(g, LEG_SIDE, 5, 30); put(g, LEG_SIDE, 7, 30); }
-  else if (frame === 1) { put(g, up1(LEG_SIDE), 2, 30); put(g, LEG_SIDE, 9, 30); }
-  else { put(g, up1(LEG_SIDE), 9, 30); put(g, LEG_SIDE, 2, 30); }
-  // 몸통
-  put(g, TORSO_SIDE, 5, 13);
-  // 팔: 템플릿 오른팔(소매 · 팔띠 · 손)을 몸 앞쪽에서 흔든다
-  put(g, TORSO_DOWN.slice(8, 17).map((r) => r.slice(13, 17)), 8 + f1, 21);
-  // 머리 + 귀 + 코(얼굴 앞 윤곽과 이어 붙인다)
-  put(g, SIDE_HEAD, 3, 1); put(g, ['oh', 'Oo', 'oh'], 6, 9);
-  put(g, ['s', 's'], 16, 12); put(g, ['s', 's'], 17, 12); put(g, ['o', 'o'], 18, 12); put(g, ['o'], 17, 11); put(g, ['o'], 17, 14);   // 코: 눈보다 아래
-  return lines(g);
-};
 
-/** 한 프레임: rows(글자 격자), ox(몸 기준 x 오프셋: 실제 x = ox + 칸), 머리 상자·손 위치 */
+/* ───────── 옆모습: 템플릿 걷기 시트(오른쪽 보기)에서 그대로 옮김 ─────────
+   맨몸 시트의 머리(깨끗함) + 옷 시트의 몸(JPG 번짐을 확신도 투표로 정리)을 같은 격자에 맞춰 합쳤다. 프레임 0 = 서 있기, 1·2 = 걷기. */
+export const SIDE_FRAMES = [
+  { ox: 7, oy: 2, head: [2, 15], rows: [
+    '................',
+    '.....lOOooool...',
+    '....sohhsslloos.',
+    '....ohsslllllso.',
+    '...losslllllllOl',
+    '...ohhslllllllsO',
+    '..lohhsslllllssO',
+    '..lohhhssslssssO',
+    '..lOhhhohhOOsssO',
+    '..lOhhoshOxOssO.',
+    '...OhhossOxvssO.',
+    '....ohhossy..llO',
+    '....ohhhhsllllso',
+    '....lohOssslllO.',
+    '...FFFFFohsssG..',
+    '..FKIIKKFHCOGK..',
+    '..FFFGGGKFBCKF..',
+    '.HKKIFGGGFBFHF..',
+    'FIIIIGFFFFFFFF..',
+    'FGGGGKFKHKHKFGH.',
+    '.HCFFCCKGIHIFFG.',
+    '..CCCCBGGIHHFG..',
+    '..BCCCCKGKHKF...',
+    '..BCFFCGHKHGF...',
+    '..BClsGIHKHIF...',
+    '..BCsssHHKHHF...',
+    '..UhshooHKHKF...',
+    '..ohsssIHGHGF...',
+    '...osssICIHKF...',
+    '...ohsIBCKHKF...',
+    '...BooCCFFFFF...',
+    '..BBCCCCCBBBF...',
+    '..BBCCCCCBBBF...',
+    '..BCCCCCBBBC....',
+    '..CBCCCBBBCC....',
+    '..CCFFCBIIIC....',
+    '..CIEEBCBIIC....',
+    '..CIEEBBBBCCC...',
+    '..BCCCCBBBCBCC..',
+    '..BCCCFFBBBBHH..',
+    '..BCCFDDFBBBCC..',
+    '..FFFFFFH.......',
+  ] },
+  { ox: 5, oy: 2, head: [4, 17], rows: [
+    '.............l.......',
+    '.......hOoooooll.....',
+    '......lohhssslOol....',
+    '.....sOssslllllsO....',
+    '.....sOssllllllsOl...',
+    '.....ohhsllllllllo...',
+    '.....ohhsslllllslo...',
+    '.....ohhhsssssssso...',
+    '....lohhhohhOOssso...',
+    '.....ohhoshoxussO....',
+    '.....ohhossoxvlsO....',
+    '.....sohhhssyvll.O...',
+    '.....sOhhhhsllll.O...',
+    '.......OhosssllsO....',
+    '.....FHHFHoEsssG.....',
+    '....CIIIKKFHUoO......',
+    '....FFHHGGKFBBKH.....',
+    '...FKIIFKGKFBFGH.....',
+    '..FIIIIGFFFFFFFH.....',
+    '..HGGGGKFKHKHKFGC....',
+    '..EFFFCFKKHIHIFFH....',
+    '..BFFCBCFHHIHHFH.....',
+    '..BCCCBCFGHKHKFF.....',
+    '..BCCCBHHGHKHHFOO....',
+    '..GllsOKHIHKHIFohO...',
+    '..GlsssOFHHKHHOhhO...',
+    '..OsshoFKKHKHKChhG...',
+    '..OssssFFHHHHHCOO....',
+    '...GsEBFKKHIHKF......',
+    '....GBBFKKHKHKF......',
+    '....BBCCFFFFFFFF.....',
+    '....BCCFCCBBBBBF.....',
+    '....BCCCCCBBBBCF.....',
+    '...CCCCCCCCBBBCF.....',
+    '..CCCCCCCC.BBCCCB....',
+    '..CICCCCF...CKCEBBBC.',
+    '.CCIICF.....FKBCCCCCF',
+    'BCCCCFB......BBBCCFFC',
+    'FCCCCCB......FBBBBFFF',
+    '.CCCBCBC......BBBBF..',
+    '..CBBCCG......FFFH...',
+    '...CCCC..............',
+  ] },
+  { ox: 5, oy: 1, head: [4, 17], rows: [
+    '......................',
+    '.......sOOooool.......',
+    '......sohhsllsool.....',
+    '......ohssllllllo.....',
+    '.....lOsslllllllO.....',
+    '....sohhsllllllssO....',
+    '....sohhssllllssso....',
+    '....sohhhsssssssso....',
+    '....sOhhhohhOOssso....',
+    '....sOhhoshOxOssO.....',
+    '....sOhhossOyulsO.....',
+    '......Ohhosh.vllsO....',
+    '......ohhhhsllllso....',
+    '.....FKFIFsssllsH.....',
+    '....EFFFFFHhssEG......',
+    '....FKIIKKFHHGGK......',
+    '....FFFGGGKFCKKH......',
+    '...HIIIFGGKFCFHH......',
+    '..HIIIIGFFFFFFFH......',
+    '..HGGGGKFKHKGKFGF.....',
+    '...HCCOOUCHIGIFFH.....',
+    '....BUVOUCCGGHFHK.....',
+    '....BUUUCCCCHKFOO.....',
+    '....CUFBCCCCCHshoO....',
+    '...OhUFCBCCUOshhso....',
+    '..KOhoFHCBCCsllsshG...',
+    '...OhoFHHCCCEsssshG...',
+    '....oHFGGGGFFFhhhG....',
+    '....KBFKKKKICCOOO.....',
+    '....KBFFFFFFFFFK......',
+    '....BBBBBBBBBBCC......',
+    '....BBBBBBBBCCCC......',
+    '....BBBBBBCCCCCCB.....',
+    '...BCCBBBFCCCCCCB.....',
+    '..BBBBBBF.CCCCCCC.....',
+    '..BBBBBB...CCCCCICEE..',
+    '.BBBBBC.....CCCIEBBBC.',
+    'BBBBBCC.....DCIE.CCCCC',
+    'CBBBBBC......BIECFCCCH',
+    '.BBBBCCC......BBFCCCHH',
+    '..BBCIIH......BBCBBB..',
+    '...FFFF.......BBBBG...',
+    '..............CCC.....',
+  ] },
+];
+
+/** 한 프레임: rows(글자 격자), ox · oy(실제 x = ox + 칸, 실제 y = oy + 줄), head(머리 x 범위 · 피부 윗줄) */
 export function bodyFrame(dir, frame) {
-  if (dir === 'down') return { rows: downFrame(frame), ox: 8, head: { x0: 2, x1: 14, y0: 1, y1: 13 }, eyes: { y: 9, xs: [5, 10] }, hand: { x: 15, y: 28 } };
-  if (dir === 'up') return { rows: upFrame(frame), ox: 8, head: { x0: 2, x1: 14, y0: 1, y1: 13 }, eyes: null, hand: { x: 1, y: 28 } };
-  return { rows: sideFrame(frame), ox: 6, head: { x0: 3, x1: 16, y0: 1, y1: 13 }, eyes: { y: 9, xs: [13] }, hand: { x: 11 + (frame === 1 ? 2 : frame === 2 ? -2 : 0), y: 29 } };
+  if (dir === 'down') return { rows: downFrame(frame), ox: 8, oy: 4, head: { x0: 2, x1: 14, y0: 1, y1: 13 }, eyes: { y: 9, xs: [5, 10] } };
+  if (dir === 'up') return { rows: upFrame(frame), ox: 8, oy: 4, head: { x0: 2, x1: 14, y0: 1, y1: 13 }, eyes: null };
+  const f = SIDE_FRAMES[frame % 3];
+  return { rows: f.rows, ox: f.ox, oy: f.oy, head: { x0: f.head[0], x1: f.head[1], y0: 1, y1: 13 }, eyes: { y: 9, xs: [f.head[1] - 3] } };
 }
