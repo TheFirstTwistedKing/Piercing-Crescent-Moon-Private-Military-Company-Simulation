@@ -7,6 +7,7 @@ import { LEADER_IDS, LEADER_SET, LEADER_TALK, AFF_MAX, REQUEST_COST } from './le
 import { WEAPON } from './weapons.js';
 import { TRAIT, ABILITY, GACHA_ODDS, TRAITS, MAX_TRAITS, MAX_ABILITIES } from './traits.js';
 import { HAIR } from './hair.js';
+import { EVENTS, EVENT, EV_CHANCE, EV_MAX_PER_DAY, EV_COOLDOWN, fxChip } from './events.js';
 import { RESEARCH_BY_KEY, freshResearch } from './research.js';
 import { CSTATS, STAT_MAX, randomPool, sumAlloc, autoAlloc, emptyAlloc, sumFx, clampStat, derive } from './rules.js';
 
@@ -66,6 +67,7 @@ export class Sim {
     this.weather = { today: rollWeather(rand), next: rollWeather(rand) }; this.snow = START_SNOW;
     this.inv = {}; this.placed = Object.fromEntries(ROOM_KEYS.map((k) => [k, Array(FURN_SLOTS).fill(null)]));
     this.dayStartFunds = this.funds; this.dayLog = this.freshLog(); this.log = [];
+    this.ev = { pending: null, cd: {}, today: 0, acc: 0, buffs: [], on: Sim.EVENTS_ON, resume: 0 };
     this.listeners = {}; this.dirty = false;
     this.syncSlots();
     for (const u of this.units) { const s = this.spot(u.home); u.place(s[0], s[1]); }
@@ -82,7 +84,7 @@ export class Sim {
     if (toast && !this.quiet) this.emit('toast', e);
     this.dirty = true;
   }
-  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0 }; }
+  freshLog() { return { missions: [], patrols: [], overheard: [], orders: 0, events: [] }; }
 
   spot(room) { const t = roomFreeTiles(room); return t[Math.floor(this.rand() * t.length)] || [28, 18]; }
 
@@ -110,7 +112,7 @@ export class Sim {
   refresh() {
     const rooms = {};
     for (const u of this.units) {
-      u.fx = sumFx(u, [ITEM[u.gear.armor]?.fx, ITEM[u.gear.acc]?.fx, (rooms[u.home] ||= this.roomFx(u.home))]); u.aura = 0;
+      u.fx = sumFx(u, [ITEM[u.gear.armor]?.fx, ITEM[u.gear.acc]?.fx, (rooms[u.home] ||= this.roomFx(u.home)), ...this.ev.buffs.filter((b) => !b.dept || b.dept === u.dept).map((b) => b.fx)]); u.aura = 0;
       u.csBase = Object.fromEntries(CSTATS.map(({ k }) => [k, clampStat(u.alloc[k] + u.bonus[k] + u.fx[k])]));
     }
     // 팀장 감화: 같은 부서 팀원의 임무 성공률 +(카리스마 × 0.4% + 친밀도 × 0.3%)
@@ -193,6 +195,91 @@ export class Sim {
       return { ok: true, lines: [pick(pool.request)], effects: [`-${REQUEST_COST.toLocaleString('ko-KR')} CR`, '부서 사기 +15 · HP +10', '팀장 친밀도 +1'] };
     }
     return { ok: false, reason: '알 수 없는 대화' };
+  }
+
+
+  /* ── 이벤트 엔진 ──
+     게임 1시간마다 EV_CHANCE 확률로 사건이 터지고(하루 최대 EV_MAX_PER_DAY건), 시간이 멈춘 채 선택을 기다린다.
+     선택지는 비용·능력치 판정(부서에서 해당 능력치가 가장 높은 인원이 나선다)·결과 효과로 이루어진다. */
+  get pendingEvent() { return this.ev.pending; }
+  evPool(dept) { return dept ? this.units.filter((u) => u.dept === dept) : this.units; }
+  evBest(dept, stat) { return this.evPool(dept).reduce((b, u) => (u.dv[stat] > b.dv[stat] ? u : b)); }
+  evChance(best, chk) { return Math.max(0.1, Math.min(0.95, 0.5 + (best.dv[chk.stat] - chk.diff) * 0.01 + best.fx.succ)); }
+  evEligible(e) {
+    const last = this.ev.cd[e.id]; if (last != null && this.day - last < EV_COOLDOWN) return false;
+    const c = e.when || {};
+    if (c.night && this.clock < DAY_PHASE_MIN) return false;
+    if (c.weather && !c.weather.includes(this.weather.today)) return false;
+    if (c.snowMin && this.snow < c.snowMin) return false;
+    return true;
+  }
+  /** 지정한 사건(id)을 강제로 시작하거나, 없으면 조건에 맞는 사건을 가중치로 뽑는다. 시작되면 시간이 멈춘다. */
+  startEvent(id = null) {
+    if (this.ev.pending) return null;
+    let def = id ? EVENT[id] : null;
+    if (!def) {
+      const pool = EVENTS.filter((e) => this.evEligible(e)); if (!pool.length) return null;
+      let r = this.rand() * pool.reduce((a, e) => a + e.weight, 0);
+      def = pool[pool.length - 1]; for (const e of pool) { r -= e.weight; if (r < 0) { def = e; break; } }
+    }
+    const members = this.evPool(def.dept), who = members[Math.floor(this.rand() * members.length)];
+    this.ev.pending = { id: def.id, who: who.id }; this.ev.cd[def.id] = this.day; this.ev.today++; this.ev.resume = this.speed; this.speed = 0;
+    this.note(`사건 발생: ${def.title}`, 'alert', false); this.emit('event', this.ev.pending); this.dirty = true;
+    return def;
+  }
+  tickEvents(dm) {
+    if (!this.ev.on || this.ev.pending) return;
+    this.ev.acc += dm;
+    while (this.ev.acc >= 60) {
+      this.ev.acc -= 60;
+      if (this.ev.today >= EV_MAX_PER_DAY || this.clock >= DAY_MINUTES - 90) continue;
+      if (this.rand() < EV_CHANCE) { this.startEvent(); return; }
+    }
+  }
+  evText(def, who, best, t) {
+    const L = def.dept ? this.leaderUnit(def.dept) : null;
+    return t.replace(/\{n\}/g, who.name).replace(/\{L\}/g, L ? L.name : '팀장').replace(/\{best\}/g, (best || who).name);
+  }
+  /** 화면에 보여 줄 현재 사건: 제목·본문·선택지(비용, 판정 확률, 선택 가능 여부) */
+  eventView() {
+    const p = this.ev.pending; if (!p) return null;
+    const def = EVENT[p.id], who = this.byId[p.who], KO = { cmb: '전투', def: '방어', mob: '기동', med: '의료', int: '정보' };
+    return {
+      id: def.id, dept: def.dept, deptKo: def.dept ? DEPT[def.dept].ko : '기지 전체', title: def.title, text: this.evText(def, who, null, def.text), who: who.name,
+      choices: def.choices.map((c, i) => {
+        const best = c.check ? this.evBest(def.dept, c.check.stat) : null, short = c.cost && this.funds < c.cost;
+        return { i, label: this.evText(def, who, null, c.label), cost: c.cost || 0, disabled: !!short, reason: short ? `자금 부족 (필요 ${c.cost.toLocaleString('ko-KR')} CR)` : '',
+          check: c.check ? { stat: KO[c.check.stat], diff: c.check.diff, chance: this.evChance(best, c.check), best: best.name } : null };
+      }),
+    };
+  }
+  applyEvFx(f, def, who) {
+    const [k, v, a] = f, scope = a || 'dept';
+    const targets = k === 'mor' || k === 'hp' ? (scope === 'unit' ? [who] : scope === 'all' ? this.units : this.evPool(def.dept)) : [];
+    if (k === 'funds') this.funds = Math.max(0, this.funds + v);
+    else if (k === 'rep') this.rep += v;
+    else if (k === 'mor') for (const u of targets) u.mor = Math.max(0, Math.min(100, u.mor + v));
+    else if (k === 'hp') for (const u of targets) u.hp = v < 0 ? Math.max(5, u.hp + v) : Math.min(100, u.hp + v);
+    else if (k === 'item' && ITEM[v]) this.inv[v] = this.owned(v) + (a || 1);
+    else if (k === 'research') this.research.points += v;
+    else if (k === 'aff') { const L = def.dept ? this.leaderUnit(def.dept) : null; if (L) L.aff = Math.max(0, Math.min(AFF_MAX, L.aff + v)); }
+    else if (k === 'snow') this.snow = Math.max(0, Math.min(100, this.snow + v));
+    else if (k === 'buff') this.ev.buffs.push({ fx: { ...v }, label: a, dept: def.dept || null });
+  }
+  chooseEvent(i) {
+    const p = this.ev.pending; if (!p) return { ok: false, reason: '진행 중인 사건이 없습니다.' };
+    const def = EVENT[p.id], c = def.choices[i]; if (!c) return { ok: false, reason: '없는 선택지입니다.' };
+    if (c.cost && this.funds < c.cost) return { ok: false, reason: `자금이 부족합니다. (필요 ${c.cost.toLocaleString('ko-KR')} CR)` };
+    const who = this.byId[p.who]; let best = who, passed = null, out = c.out;
+    if (c.cost) this.funds -= c.cost;
+    if (c.check) { best = this.evBest(def.dept, c.check.stat); passed = this.rand() < this.evChance(best, c.check); out = passed ? c.ok : c.fail; }
+    const chips = c.cost ? [{ t: `비용 -${c.cost.toLocaleString('ko-KR')} CR`, good: false }] : [];
+    for (const f of out.fx) { this.applyEvFx(f, def, who); chips.push(fxChip(f, (id) => ITEM[id]?.name || id)); }
+    const text = this.evText(def, who, best, out.t), label = this.evText(def, who, null, c.label);
+    this.ev.pending = null; this.dayLog.events.push({ title: def.title, choice: label, text, chips: chips.map((x) => x.t), passed, clock: Math.floor(this.clock) });
+    this.note(`사건 「${def.title}」 — ${label}${passed === null ? '' : passed ? ' (성공)' : ' (실패)'}`, passed === false ? 'bad' : 'info', false);
+    this.refresh(); this.emit('event', null);
+    return { ok: true, title: def.title, choice: label, text, chips, passed, best: best.name };
   }
 
   /* ── 야외 작업(재설 / 용광로 발전) ── */
@@ -368,7 +455,7 @@ export class Sim {
   }
 
   /* ── 진행 ── */
-  setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended) s = 0; this.speed = s; }
+  setSpeed(s) { if (s === 3 && !this.research.speed3) s = 2; if (this.ended || this.ev.pending) s = 0; this.speed = s; }
 
   /** 실제 시간 sec 초만큼 한꺼번에 진행(백그라운드에서 돌아왔을 때 따라잡기). 하루가 끝나거나 정지 상태면 멈춘다. */
   advance(sec) {
@@ -383,6 +470,7 @@ export class Sim {
     this.clock += dm;
     if (this.clock >= DAY_MINUTES) { this.clock = DAY_MINUTES; this.ended = true; this.speed = 0; this.note('하루가 종료되었습니다. 오늘의 보고서를 제출하세요.', 'alert'); this.emit('dayend'); }
     for (const u of this.units) this.updateUnit(u, dt, dm);
+    this.tickEvents(dm);
   }
 
   updateUnit(u, dt, dm) {
@@ -499,12 +587,14 @@ export class Sim {
     const injured = this.units.filter((u) => u.hp < 50).map((u) => ({ name: u.name, hp: Math.round(u.hp) }));
     const m = L.missions;
     const summary = `임무 ${m.length}건(성공 ${m.filter((x) => x.result === 'success').length}, 부분 ${m.filter((x) => x.result === 'partial').length}, 실패 ${m.filter((x) => x.result === 'fail').length}), 순찰 ${L.patrols.length}회, 명령 ${L.orders}건. 수입 ${fmtCredits(income)}, 운영비 ${fmtCredits(-upkeep)}.`;
-    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), depts, injured, summary };
+    return { day: this.day, createdAt: Date.now(), clockEnd: Math.floor(this.clock), ended: this.ended, fundsStart: this.dayStartFunds, income, upkeep, fundsEnd: this.funds - upkeep, rep: this.rep, weather: WEATHERS[this.weather.today].ko, snow: Math.round(this.snow), missions: m.slice(), patrols: L.patrols.slice(), overheard: L.overheard.slice(), events: (L.events || []).slice(), depts, injured, summary };
   }
 
   /** 보고서 제출 후 다음 날로 */
   nextDay(report) {
     this.funds = report.fundsEnd;
+    if (this.ev.pending) { this.note(`결정하지 못한 사건 「${EVENT[this.ev.pending.id].title}」은(는) 그대로 흘러갔다.`, 'info', false); this.ev.pending = null; }
+    this.ev.buffs = []; this.ev.today = 0; this.ev.acc = 0;
     const medics = this.units.filter((u) => u.dept === 'medical').length;
     for (const u of this.units) {
       u.hp = Math.min(100, u.hp + 22 + (u.hp < 50 ? 10 * medics : 0));
@@ -515,6 +605,7 @@ export class Sim {
     this.weather = { today: this.weather.next, next: rollWeather(this.rand) }; this.snow = dailySnow(this.snow, this.weather.today);
     this.research.points += 1; report.researchPoints = this.research.points;
     this.day += 1; this.clock = 0; this.ended = false; this.speed = 0; this.dayStartFunds = this.funds; this.dayLog = this.freshLog();
+    this.refresh();   // 하루짜리 버프 해제 반영
     this.note(`DAY ${this.day} 개시 — 자금 ${fmtCredits(this.funds)}`, 'info', false);
   }
 
@@ -522,7 +613,7 @@ export class Sim {
   serialize() {
     const units = {};
     for (const u of this.units) units[u.id] = { c: { nm: u.name, ln: u.latin, hs: u.look.hairStyle, hc: u.look.hair, w: u.weapon, pool: u.pool, alloc: u.alloc, used: u.used, traits: u.traits, eq: u.eq, ab: u.ab }, hp: Math.round(u.hp), mor: Math.round(u.mor), home: u.home, mode: u.mode === 'goto' ? 'idle' : u.mode, phase: u.phase, mission: u.mission, patrol: u.patrol ? { ...u.patrol, wi: 0 } : null, work: u.work, g: { gear: u.gear, bonus: u.bonus, kit: u.kit, warm: u.warm, aff: u.aff, talked: u.talked, asked: u.asked } };
-    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units };
+    return { v: 1, day: this.day, clock: Math.floor(this.clock), funds: this.funds, rep: this.rep, ended: this.ended, dayStartFunds: this.dayStartFunds, dayLog: this.dayLog, log: this.log.slice(-40), research: this.research, weather: this.weather, snow: Math.round(this.snow), inv: this.inv, placed: this.placed, units, ev: { pending: this.ev.pending, cd: this.ev.cd, today: this.ev.today, acc: Math.round(this.ev.acc), buffs: this.ev.buffs } };
   }
   restore(s) {
     if (!s || s.v !== 1) return;
@@ -535,6 +626,12 @@ export class Sim {
     this.inv = {}; for (const [id, n] of Object.entries(s.inv || {})) if (ITEM[id] && Number.isInteger(n) && n > 0) this.inv[id] = n;
     for (const room of ROOM_KEYS) for (let i = 0; i < FURN_SLOTS; i++) { const id = s.placed?.[room]?.[i]; this.placed[room][i] = id && ITEM[id]?.cat === 'furniture' ? id : null; }
     this.syncSlots();
+    const ev = s.ev || {}, FXK = ['str', 'def', 'skl', 'cha', 'chm', 'wis', 'succ', 'night', 'day', 'reward', 'dmg', 'heal', 'speed', 'rep', 'mor', 'rest'];
+    this.ev.cd = {}; for (const [id, d] of Object.entries(ev.cd || {})) if (EVENT[id] && Number.isInteger(d)) this.ev.cd[id] = d;
+    this.ev.today = Math.max(0, Math.min(EV_MAX_PER_DAY, Math.floor(ev.today || 0))); this.ev.acc = Math.max(0, Math.min(59, Number(ev.acc) || 0));
+    this.ev.pending = ev.pending && EVENT[ev.pending.id] && this.byId[ev.pending.who] ? { id: ev.pending.id, who: ev.pending.who } : null;
+    this.ev.buffs = (Array.isArray(ev.buffs) ? ev.buffs : []).filter((b) => b && b.fx && typeof b.fx === 'object').slice(0, 12).map((b) => ({ fx: Object.fromEntries(Object.entries(b.fx).filter(([k, v]) => FXK.includes(k) && Number.isFinite(v) && Math.abs(v) <= 5)), label: String(b.label || '').slice(0, 30), dept: DEPT[b.dept] ? b.dept : null }));
+    if (this.ev.pending) this.speed = 0;
     for (const [id, st] of Object.entries(s.units || {})) {
       const u = this.byId[id]; if (!u) continue;
       u.hp = st.hp; u.mor = st.mor; u.home = ROOM_LABEL[st.home] ? st.home : u.home;
@@ -559,4 +656,5 @@ export class Sim {
     this.refresh();
   }
 }
+Sim.EVENTS_ON = true;   // 테스트에서 false 로 끄면 무작위 사건이 발생하지 않는다
 export { DEPTS, DEPT, ROOMS };
