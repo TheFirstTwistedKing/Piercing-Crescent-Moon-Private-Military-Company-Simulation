@@ -178,6 +178,49 @@ function drawSheetHair(P, view, style, col, tip, box) {
   });
 }
 
+
+/** 입체감 칠하기 — 머리 덩어리를 '둥근 물체'로 보고 왼쪽 위에서 빛이 온다고 가정해 칠한다(참고 도안처럼 깨끗한 몇 개의 면).
+ *  ① 바깥 윤곽선(가장 어두움) ② 빛 장(정수리 곡면 + 위쪽) − 그림자 장(아래 · 오른쪽)을 5단계 톤으로 끊고, 단계 경계에서만 1칸 디더링
+ *  ③ 정수리에서 퍼지는 가닥 덩어리: 어긋나게 끊긴 어두운 가닥 선 + 선 옆 밝은 마루 ④ 끝 가닥을 길이가 다르게 깎아 갈라진 끝 ⑤ 어두운 머리색은 하이라이트를 키우고 그림자를 줄임 */
+const TONE = [-46, -24, 0, 20, 44];
+function formShade(g, bx, mid, c0) {
+  const luma = (c0[0] * 0.3 + c0[1] * 0.59 + c0[2] * 0.11), dark = luma < 80, bright = luma > 200, hi = dark ? 1.7 : bright ? 0.8 : 1, lo = dark ? 0.45 : bright ? 1.15 : 1;
+  const has = (x, y) => g.has(x, y), hs = (n) => { let h = (n * 374761393) >>> 0; h = ((h ^ (h >> 13)) * 1274126177) >>> 0; return ((h ^ (h >> 16)) >>> 0) / 4294967296; };
+  let pts = [...g.m.values()]; const out = new Map(); if (!pts.length) return out;
+  let x0 = 99, x1 = -1, y0 = 99, y1 = -1; for (const [x, y] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const cx = (bx.x0 + bx.x1 + 1) / 2, hw = Math.max(6, (x1 - x0) / 2 + 1), H = Math.max(6, y1 - y0 + 1), flow = (x, y) => x + Math.round(((x + 0.5 - cx) / hw) * (y - y0) * 0.24);
+  // 끝 가닥: 긴 머리 아래쪽 끝을 가닥(4칸 폭)마다 길이를 달리 깎는다
+  for (const [x, y] of pts) { if (g.mark.get(g.k(x, y)) === 'stub' || has(x, y + 1) || (y - y0) / H < 0.3) continue; const gr = Math.floor(flow(x, y) / 4), r = hs(gr * 7 + 3), lowEdge = (y - y0) / H >= 0.72; if (r < (lowEdge ? 0.3 : 0.2) && has(x, y - 1) && has(x, y - 2) && has(x, y - 3)) { g.del(x, y); if (lowEdge && r < 0.1 && has(x, y - 2) && has(x, y - 3) && has(x, y - 4)) g.del(x, y - 1); } }
+  pts = [...g.m.values()];
+  const dist = new Map(); let frontier = [];
+  for (const [x, y] of pts) if (!has(x - 1, y) || !has(x + 1, y) || !has(x, y - 1) || !has(x, y + 1)) { dist.set(g.k(x, y), 0); frontier.push([x, y]); }
+  for (let d = 1; d <= 3; d++) { const nx = []; for (const [x, y] of frontier) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = g.k(x + dx, y + dy); if (has(x + dx, y + dy) && !dist.has(k)) { dist.set(k, d); nx.push([x + dx, y + dy]); } } frontier = nx; }
+  // 면 나누기: 정수리 캡(밝음) · 본체 · 아래/오른쪽 그림자 + 왼쪽 위 하이라이트 덩어리. 경계 1칸만 체크무늬 디더링(sdf = 경계까지의 칸 수, 양수 = 안쪽)
+  const mixBy = (sdf, x, y) => (sdf > 0.7 ? 1 : sdf < -0.7 ? 0 : ((x + y) & 1) ? 1 : 0);
+  for (const [x, y] of pts) {
+    const k = g.k(x, y), mk = g.mark.get(k), d = dist.get(k) ?? 4, u = (x + 0.5 - cx) / hw, v = (y - y0) / H, above = !has(x, y - 1), left = !has(x - 1, y), below = !has(x, y + 1), rightE = !has(x + 1, y);
+    let off = 0;
+    {
+      let lv = 2;                                                                    // 0..4 = 가장 어두움 ~ 가장 밝음, 2 = 기본색
+      const capB = (0.3 - 0.1 * u - v) * H, shB = (v - (0.64 - 0.12 * u)) * H, sideB = (u - 0.58) * hw;
+      if (mixBy(capB, x, y)) lv = 3;
+      if (mixBy(-shB, x, y) === 0 || mixBy(-sideB, x, y) === 0) lv = 1;
+      const px = (u + 0.36) / 0.3, py = (v - 0.2) / 0.16;
+      if (px * px + py * py < 1) lv = 4;                                              // 하이라이트 덩어리
+      if (d === 1 && lv <= 2 && (v > 0.45 || u > 0.35)) lv = 0;                       // 윤곽 안쪽 어두운 띠(아래·오른쪽)
+      off = TONE[lv] * (lv >= 3 ? hi : lo) * (mk === 'stub' ? 0.6 : 1);
+      if (mk === 'stub') off += hs(x * 31 + y) < 0.3 ? 8 * hi : -8 * lo;            // 짧은 머리: 결 대신 까끌한 점
+      // 가닥: 4칸 폭 덩어리 — 어긋나게 끊긴 어두운 선(앞 5칸 선 · 2칸 쉼) + 선 옆 밝은 마루
+      const sx = flow(x, y), m4 = ((sx % 4) + 4) % 4, gi = Math.floor(sx / 4), phase = (y - y0 + gi * 3) % 7;
+      if (mk !== 'stub' && v > 0.22 && d >= 1) { if (m4 === 0 && phase < 5) off -= 26 * lo; else if (m4 === 1 && lv >= 2 && phase < 5) off += 14 * hi; }
+      if (mk === 'dsh') off -= 46 * lo; else if (mk === 'sh') off -= 26 * lo;       // 가르마·구분선
+    }
+    if (d === 0) off = mk === 'stub' ? -52 * lo : (above || left) && v < 0.5 && u < 0.2 ? -38 * lo : -96 * lo - (below || rightE ? 10 : 0);   // 윤곽: 왼쪽 위는 약한 림 라이트, 나머지는 거의 검정
+    out.set(k, [x, y, toHex(mid(x, y).map((c) => c + off))]);
+  }
+  return out;
+}
+
 export function drawHair3(P, view, style, col, tip, box) {
   if (style.sheet) return drawSheetHair(P, view, style, col, tip, box);
   const { g: vg } = hairGrid(view, style), c0 = hex(col), t0 = tip ? hex(tip) : null;
@@ -191,20 +234,7 @@ export function drawHair3(P, view, style, col, tip, box) {
     if (vg.has(vx, vy)) { g.set(tx, ty); const mk = vg.mark.get(vg.k(vx, vy)); if (mk) g.mark.set(g.k(tx, ty), mk); }
   }
   const mid = (x, y) => { let rgb = c0; if (t0) { const t = Math.max(0, Math.min(1, (y - 6) / 14)), tt = t * t * (3 - 2 * t); rgb = c0.map((v, i) => v + (t0[i] - v) * tt); } return rgb; };
-  const out = new Map();
-  for (const [x, y] of g.m.values()) {
-    const k = g.k(x, y), mk = g.mark.get(k), up1 = g.has(x, y - 1), up2 = g.has(x, y - 2), dn = g.has(x, y + 1), rt = g.has(x + 1, y);
-    let d = 0;
-    if (mk === 'dsh') d = -46; else if (mk === 'sh') d = -30; else if (mk === 'stub') d = -22;
-    else if (!up1) d = x < 17 ? 36 : 20;
-    else if (!up2) d = 14;
-    else if (!dn) d = -30;
-    else if (!rt) d = -18;
-    else if ((x + ((y >> 2) * 2)) % 4 === 0) d = -15;      // 세로 가닥(4픽셀 길이 줄무늬)
-    else if ((x + ((y >> 2) * 3)) % 7 === 0) d = 12;
-    const rgb = mid(x, y).map((v) => v + d);
-    out.set(k, [x, y, toHex(rgb)]);
-  }
+  const out = formShade(g, bx, mid, c0);
   // 같은 줄에서 같은 색이 이어지면 한 사각형으로
   const rows = new Map(); for (const [x, y, c] of out.values()) { if (!rows.has(y)) rows.set(y, []); rows.get(y).push([x, c]); }
   for (const [y, list] of rows) { list.sort((a, b) => a[0] - b[0]); let i = 0; while (i < list.length) { let j = i; while (j + 1 < list.length && list[j + 1][0] === list[j][0] + 1 && list[j + 1][1] === list[i][1]) j++; P(list[i][1], list[i][0], y, j - i + 1, 1); i = j + 1; } }
