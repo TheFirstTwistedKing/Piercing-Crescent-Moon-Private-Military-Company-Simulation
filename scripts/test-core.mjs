@@ -119,8 +119,8 @@ await t('성공 확률: 같은 부서·높은 스탯이 더 높고 범위 [0.05,
   assert.ok(a > b); for (const u of s.units) for (const m of MISSIONS) { const p = successChance(u, m); assert.ok(p >= 0.05 && p <= 0.97); }
 });
 
-await t('커스터마이징 데이터: 머리 남/여 24개, 무기 19종, 특성 20/20/20, 능력 5, 스탯 6', () => {
-  assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 24);
+await t('커스터마이징 데이터: 머리 남 18 · 여 8, 무기 19종, 특성 20/20/20, 능력 5, 스탯 6', () => {
+  assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 18); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 8);
   assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '서리 대검', '배틀엑스', '권총', '기관단총', '기관총', '저격총', '로켓 런처', '박격포']);
   for (const r of ['c', 'r', 'l']) assert.equal(TRAITS.filter((x) => x.rarity === r).length, 20, r);
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && x.bad).length >= 3, '순수하게 나쁜 전설 특성');
@@ -183,9 +183,9 @@ await t('효과 반영: 카피캣·무기·특성이 성공률/보상/이동속�
   assert.ok(b.funds > a.funds, '수입 증가');
 });
 await t('저장/복원: 커스터마이징·특성·연구가 유지되고 잘못된 값은 걸러진다', () => {
-  const s = new Sim(null, Math.random); s.setHair('c04', 'f6', '#ff00aa'); s.setWeapon('c04', 'rapier'); s.setStat('c04', 'str', 4); s.byId.c04.traits = ['c01', 'r02']; s.byId.c04.used = 2; s.toggleTrait('c04', 'r02'); s.research.points = 7; s.research.abilities = ['might']; s.toggleAbility('c04', 'might');
+  const s = new Sim(null, Math.random); s.setHair('c04', 'f9', '#ff00aa'); s.setWeapon('c04', 'rapier'); s.setStat('c04', 'str', 4); s.byId.c04.traits = ['c01', 'r02']; s.byId.c04.used = 2; s.toggleTrait('c04', 'r02'); s.research.points = 7; s.research.abilities = ['might']; s.toggleAbility('c04', 'might');
   const snap = JSON.parse(JSON.stringify(s.serialize())); const x = new Sim(snap, Math.random); const u = x.byId.c04;
-  assert.equal(u.look.hairStyle, 'f6'); assert.equal(u.look.hair, '#ff00aa'); assert.equal(u.weapon, 'rapier'); assert.equal(u.alloc.str, s.byId.c04.alloc.str); assert.equal(u.pool, s.byId.c04.pool);
+  assert.equal(u.look.hairStyle, 'f9'); assert.equal(u.look.hair, '#ff00aa'); assert.equal(u.weapon, 'rapier'); assert.equal(u.alloc.str, s.byId.c04.alloc.str); assert.equal(u.pool, s.byId.c04.pool);
   assert.deepEqual(u.eq, ['r02']); assert.deepEqual(u.ab, ['might']); assert.equal(x.research.points, 7); assert.equal(u.used, 2);
   snap.units.c04.c = { hs: 'zz', hc: 'red', w: 'laser', pool: 999, alloc: { str: 99, def: 99, skl: 99, cha: 99, chm: 99, wis: 99 }, used: 0, traits: ['nope', 'c01', 'c01'], eq: ['c01', 'x', 'c02', 'r01', 'r02'], ab: ['dragon'] };
   const y = new Sim(snap, Math.random).byId.c04; assert.equal(y.look.hairStyle, 'f6'.length ? y.look.hairStyle : ''); assert.ok(y.pool >= 40 && y.pool <= 50); assert.ok(sumAlloc(y.alloc) <= y.pool); assert.deepEqual(y.traits, ['c01']); assert.deepEqual(y.eq, ['c01']); assert.deepEqual(y.ab, []);
@@ -543,21 +543,21 @@ await t('복장 30종(참고 자료 15벌 × 남/여): 4방향 × 3걸음 모두
   const s = new Sim(null, () => 0.5); assert.ok(s.setOutfit('c02', 'o14m').ok); assert.ok(!s.setOutfit('c02', 'zzz').ok); const r2 = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(r2.byId.c02.look.outfit, 'o14m', '저장/복원'); assert.ok(s.setOutfit('c02', null).ok); assert.equal(s.byId.c02.look.outfit, undefined);
   const fresh = new Sim(null, () => 0.5); assert.ok(fresh.units.every((u) => OUTFIT[u.look.outfit]?.g === u.gender), '로스터 모두 성별에 맞는 기본 복장 보유');
 });
-await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
-  assert.equal(HAIR_STYLES.length, 79, '기본 48 + 헤어 템플릿 30 + 은발 원본 1'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 79); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 79, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 31, '템플릿 30종 + 은발 원본은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 24);
-  const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 28); assert.equal(ext.filter((s) => s.g === 'm').length, 14); assert.equal(ext.filter((s) => s.g === 'f').length, 14);
+await t('헤어스타일(큰 머리를 뺀 50종): 남 18 · 여 8 · 템플릿 24, 확장 10+3 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
+  assert.equal(HAIR_STYLES.length, 50, '큰 머리 29종을 뺀 50종'); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 50); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 50, '이름 고유'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'x').length, 24, '템플릿 23종 + 은발 원본은 남녀 공용'); assert.equal(HAIR_STYLES.filter((s) => s.g === 'm').length, 18); assert.equal(HAIR_STYLES.filter((s) => s.g === 'f').length, 8);
+  const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 13); assert.equal(ext.filter((s) => s.g === 'm').length, 10); assert.equal(ext.filter((s) => s.g === 'f').length, 3);
   const cells = (id, view) => { const c = new Set(); drawHair((col, x, y, w, h) => { assert.ok(/^#[0-9a-f]{6}$/.test(col), id + ' 색 형식'); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) c.add(`${x + i},${y + j}`); }, view, id, '#808080'); return c; };
   const views = ['down', 'up', 'side'], diff = (a, b) => { let d = 0; for (const v of views) { const A = cells(a, v), B = cells(b, v); for (const c of A) if (!B.has(c)) d++; for (const c of B) if (!A.has(c)) d++; } return d; };
-  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 79, '79개 윤곽 모두 다름');
+  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 50, '50개 윤곽 모두 다름');
   for (const s of HAIR_STYLES) for (const v of views) { const m = cells(s.id, v); assert.ok(m.size > 0, s.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x <= 15.5 && y >= 0 && y <= 23.5, `${s.name} ${v} 범위 밖 ${c}`); } }
   for (const a of ext) for (const b of HAIR_STYLES) { if (a === b || a.g !== b.g) continue; assert.ok(diff(a.id, b.id) >= 12, `${a.name} / ${b.name} 윤곽 차이 ${diff(a.id, b.id)}px`); }
   // 색: 14 + 9, 모두 올바른 hex 이고 중복 없음, 모든 스타일이 모든 색으로 그려진다
   assert.equal(HAIR_COLORS.length, 23); assert.ok(HAIR_COLORS.every((c) => /^#[0-9a-f]{6}$/.test(c))); assert.equal(new Set(HAIR_COLORS).size, 23);
   for (const c of HAIR_COLORS.slice(14)) for (const s of ext.slice(0, 3)) drawHair(() => {}, 'down', s.id, c, '#c0261c');
   // 끝색 그라데이션도 확장 스타일에서 동작
-  const used = new Set(); drawHair((col) => used.add(col), 'up', 'f11', '#101010', '#c0261c'); assert.ok(used.size > 3, '그라데이션 색이 여러 단계');
-  assert.ok(HAIR.m24.v2 && HAIR.f24.v2);
-  const sx = new Sim(null, () => 0.5); assert.ok(sx.setHair('c04', 'f24', '#2d6a4f').ok && sx.setHair('c05', 'm24', '#F4F4F6').ok); const rx = new Sim(JSON.parse(JSON.stringify(sx.serialize())), () => 0.5); assert.equal(rx.byId.c04.look.hairStyle, 'f24'); assert.equal(rx.byId.c05.look.hairStyle, 'm24'); assert.equal(rx.byId.c05.look.hair, '#f4f4f6', '저장/복원');
+  const used = new Set(); drawHair((col) => used.add(col), 'up', 'f12', '#101010', '#c0261c'); assert.ok(used.size > 3, '그라데이션 색이 여러 단계');
+  assert.ok(HAIR.m24.v2 && HAIR.f13.v2);
+  const sx = new Sim(null, () => 0.5); assert.ok(sx.setHair('c04', 'f13', '#2d6a4f').ok && sx.setHair('c05', 'm24', '#F4F4F6').ok); const rx = new Sim(JSON.parse(JSON.stringify(sx.serialize())), () => 0.5); assert.equal(rx.byId.c04.look.hairStyle, 'f13'); assert.equal(rx.byId.c05.look.hairStyle, 'm24'); assert.equal(rx.byId.c05.look.hair, '#f4f4f6', '저장/복원');
 });
 await t('용병 모집 후보: 결정적 생성, 등급별 능력치·비용 범위, 이름 중복 없음, 면접 전에는 정확한 값·특성을 숨김, 데이터 검증', () => {
   const taken = { names: new Set(ROSTER.map((r) => r.name)), latins: new Set(ROSTER.map((r) => r.latin)) };
