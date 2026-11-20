@@ -74,9 +74,9 @@ export function toRects(px) {
 
 /** 공방별 색 팔레트(역할 → 색) */
 export const PALETTES = {
-  magma: { B: '#76615f', D: '#3a2d30', H: '#c2a8a2', K: '#241c1f', T: '#c0502a', E: '#ff7a2a', F: '#ffd27a', W: '#6a4030', L: '#3a2218' },
-  arc: { B: '#b9c9d8', D: '#6f8499', H: '#eaf6ff', K: '#3a4656', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#3a5a78', L: '#1f2c3a' },
-  wad: { B: '#9aa4af', D: '#5f6a76', H: '#dfe5eb', K: '#3d454e', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5e6b78', L: '#2a323a' },
+  magma: { B: '#8e7571', D: '#5a4745', H: '#dcc2b8', K: '#4e3d3e', T: '#e0642a', E: '#ff8a3a', F: '#ffe08a', W: '#8a5a3e', L: '#52331f' },
+  arc: { B: '#b9c9d8', D: '#6f8499', H: '#eaf6ff', K: '#4a5a6e', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#3a5a78', L: '#1f2c3a' },
+  wad: { B: '#9aa4af', D: '#66717d', H: '#dfe5eb', K: '#4c5662', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5e6b78', L: '#2a323a' },
 };
 
 /** 총기(옆모습, 총구가 오른쪽): 개머리판·몸체·핸드가드·총열·총구·손잡이·탄창·조준경·양각대·발광 장식을 조합한다.
@@ -151,8 +151,8 @@ export function gunPixels(s) {
 
 /** 총기 도트는 공방/종류별로 색 역할 → 색 팔레트를 쓴다 */
 export const GUN_PALETTES = {
-  gun: { B: '#59616b', D: '#3a3f46', H: '#8b95a1', K: '#1c1f24', T: '#c9a24a', E: '#7fb0e8', F: '#cfe6ff', W: '#6a4a2a', L: '#0e1013', R: '#a5382a', O: '#4a5a3a', G: '#7fb0e8' },
-  magma: { B: '#6a5558', D: '#2e2326', H: '#b09294', K: '#17100f', T: '#c0502a', E: '#ff7a2a', F: '#ffd27a', W: '#5a3626', L: '#0b0606', R: '#a5382a', O: '#5a3a2a', G: '#ff9b3a' },
-  arc: { B: '#a9b9c9', D: '#5f748a', H: '#e6f4ff', K: '#2b3644', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#33506a', L: '#12181f', R: '#b46bff', O: '#3a5a78', G: '#b46bff' },
-  wad: { B: '#8f98a3', D: '#555f6b', H: '#d9dfe6', K: '#2e353d', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5a4a38', L: '#16191d', R: '#a5382a', O: '#56604a', G: '#7fc8ff' },
+  gun: { B: '#707a86', D: '#555d68', H: '#aeb8c4', K: '#3a4048', T: '#d4ac4e', E: '#7fb0e8', F: '#cfe6ff', W: '#8c6238', L: '#14171a', R: '#c0443a', O: '#6a7f50', G: '#7fb0e8' },
+  magma: { B: '#85696c', D: '#52413f', H: '#cfb2b4', K: '#443436', T: '#e0642a', E: '#ff8a3a', F: '#ffe08a', W: '#855640', L: '#150d0c', R: '#c0443a', O: '#a06c52', G: '#ffab4a' },
+  arc: { B: '#a9b9c9', D: '#667b92', H: '#e6f4ff', K: '#44546a', T: '#4fd8ff', E: '#4fd8ff', F: '#e6fbff', W: '#33506a', L: '#12181f', R: '#b46bff', O: '#3a5a78', G: '#b46bff' },
+  wad: { B: '#8f98a3', D: '#606b77', H: '#d9dfe6', K: '#444d57', T: '#d8b64e', E: '#d8b64e', F: '#fff1b0', W: '#5a4a38', L: '#16191d', R: '#a5382a', O: '#56604a', G: '#7fc8ff' },
 };

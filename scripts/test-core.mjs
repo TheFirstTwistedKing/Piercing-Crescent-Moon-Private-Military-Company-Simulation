@@ -6,7 +6,7 @@ import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChan
 import { nickKey, nickProblem } from '../src/core/nick.js';
 import { TRAITS, TRAIT, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
 import { HAIR_STYLES, HAIR_COLORS, HAIR, drawHair } from '../src/game/hair.js';
-import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, drawWeapon } from '../src/game/weapons.js';
+import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, drawWeapon, iconRects } from '../src/game/weapons.js';
 import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
 import { RESEARCH, RESEARCH_BY_KEY } from '../src/game/research.js';
 import { WEATHERS, rollWeather, dailySnow, TASKS, START_SNOW } from '../src/game/weather.js';
@@ -631,5 +631,21 @@ await t('공방 총기 30종: 종류마다 5개, 사거리·범위 피해 상속
   const sx = new Sim(JSON.parse(JSON.stringify(s.serialize())), () => 0.5); assert.equal(sx.byId.c04.weapon, w.id, '저장/복원');
   // 총기 색은 공방마다 다르다
   const cols = (id) => { const c = new Set(); drawWeapon((col) => c.add(col), 'down', id); return [...c].join(); }; assert.notEqual(cols(gw.find((x) => x.workshop === 'magma').id), cols(gw.find((x) => x.workshop === 'arc').id));
+});
+await t('무기 시각 품질(검증 회귀): 아이콘이 잘리지 않고, 색 누락이 없고, 총기는 16칸 이내이며, 어두운 옷 위에서도 윤곽이 읽힌다, 모든 효과가 화면에 표시된다', () => {
+  const all = [...WEAPONS, ...WORKSHOP_WEAPONS]; assert.equal(all.length, 109);
+  for (const w of all) {
+    for (const [c, x, y, wd, ht] of iconRects(w.id)) { assert.ok(x >= 0 && y >= 0 && x + wd <= 16 && y + ht <= 20, `${w.name} 아이콘이 잘림 (${x},${y},${wd},${ht})`); assert.notEqual(c, '#ff00ff', `${w.name} 아이콘 색 누락`); }
+    for (const v of ['down', 'up', 'side']) drawWeapon((c, x, y, wd, ht) => { assert.ok(/^#[0-9a-f]{6}$/.test(c) && c !== '#ff00ff', `${w.name} ${v} 색 누락`); assert.ok(x >= -8 && x + wd <= 24 && y >= 0 && y + ht <= 24, `${w.name} ${v} 범위 밖`); }, v, w.id);
+    assert.equal(fxLines(w.fx).length, Object.keys(w.fx).length, `${w.name} 효과가 화면에 모두 표시된다`); assert.ok(w.name && !/undefined|[{}]/.test(w.name + w.desc));
+    if (w.gun) { const xs = w.art.px.map((q) => q[0]); assert.ok(Math.max(...xs) - Math.min(...xs) + 1 <= 16, `${w.name} 총기 길이 16칸 이내`); }
+  }
+  // 대비: 대표 옷 색(중앙값) 위에서 무기 평균색 ≥ 1.5:1, 가장 밝은 색 ≥ 4:1 (마그마의 어두운 몸체가 묻히던 문제의 회귀 방지)
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16), f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); };
+  const coats = ROSTER.map((r) => lum(r.look.coat)).sort((a, b) => a - b), med = coats[Math.floor(coats.length / 2)], ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  const byWorkshop = {};
+  for (const w of all) { const cells = []; drawWeapon((c, x, y, wd, ht) => cells.push([c, wd * ht]), 'down', w.id); const area = cells.reduce((a, c) => a + c[1], 0), mean = cells.reduce((a, c) => a + lum(c[0]) * c[1], 0) / area, hi = Math.max(...cells.map((c) => lum(c[0])));
+    assert.ok(ratio(mean, med) >= 1.5, `${w.name} 평균색 대비 ${ratio(mean, med).toFixed(2)}`); assert.ok(ratio(hi, med) >= 4, `${w.name} 가장 밝은 색 대비 ${ratio(hi, med).toFixed(2)}`); if (w.workshop) (byWorkshop[w.workshop] ||= []).push(ratio(mean, med)); }
+  for (const [k, v] of Object.entries(byWorkshop)) assert.ok(v.reduce((a, b) => a + b, 0) / v.length >= 2, `${k} 공방 평균 대비`);
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
