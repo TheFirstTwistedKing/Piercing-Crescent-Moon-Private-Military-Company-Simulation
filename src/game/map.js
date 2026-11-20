@@ -8,7 +8,7 @@ export const PAL = {
   wallCap: '#3b2e23', wallFace: '#1c1511', wallLow: '#120d0a', gold: '#c9a24a', goldDim: '#7c6029',
   floorA: '#2d231b', floorB: '#281f18', plank: '#1f1813',
   corA: '#262019', corB: '#221c16', corLine: '#19140f',
-  yardA: '#1e251f', yardB: '#1a211c', yardTuft: '#243028', road: '#23211e', fence: '#4a4a46',
+  void: '#05070a', yardA: '#1e251f', yardB: '#1a211c', yardTuft: '#243028', road: '#23211e', fence: '#4a4a46',
   wood: '#4b3b2b', woodDark: '#2e231a', ice: '#cfe1f2',
 };
 
@@ -242,7 +242,14 @@ export function renderStatic() {
       if (!concrete) { R(c, PAL.plank, px, py + 7, TS, 1); R(c, PAL.plank, px, py + 15, TS, 1); if ((x * 7 + y) % 5 === 0) R(c, PAL.plank, px + 8, py, 1, 7); }
       else if (rnd() < 0.25) R(c, '#1e1e1d', px + ((rnd() * 12) | 0), py + ((rnd() * 12) | 0), 2, 2);
     } else if (k === 4) {
+      // 울타리 타일: 울타리 안쪽만 마당 바닥, 바깥쪽은 지도 밖(빈 공간)으로 둔다 — 바닥이 울타리를 넘어가 보이지 않게
+      const gate = y === MH - 1 && (x === GATE.x || x === GATE.x + 1);
       R(c, PAL.yardB, px, py, TS, TS);
+      if (!gate) {
+        if (y === 0) R(c, PAL.void, px, py, TS, 6);
+        else if (y === MH - 1) R(c, PAL.void, px, py + 10, TS, 6);
+        else if (x === MW - 1) R(c, PAL.void, px + 3, py, TS - 3, TS);
+      }
     }
   }
   // 울타리
@@ -280,7 +287,7 @@ function drawObject(c, o) {
   const wood = PAL.wood, dark = PAL.woodDark;
   switch (o.type) {
     case 'monitors': {
-      R(c, '#1a1c1f', x, y + 2, w, h * TS - 4); R(c, '#0d0f11', x, y + h - 4, w, 4);
+      R(c, '#1a1c1f', x, y + 2, w, h - 4); R(c, '#0d0f11', x, y + h - 4, w, 4);
       for (let i = 0; i < o.w; i++) { R(c, '#0b1a22', x + i * TS + 2, y + 3, 12, 8); R(c, '#6f95a8', x + i * TS + 4, y + 5, 6 - (i % 3) * 1, 1); R(c, '#3d6173', x + i * TS + 4, y + 8, 8, 1); }
       break;
     }
