@@ -5,7 +5,7 @@ import { findPath, PATROLS, ROOMS, roomFreeTiles, roomDoorTile, isSolid, GATE, C
 import { Sim, DAY_MINUTES, DAY_REAL_SECONDS, MIN_PER_SEC, clockInfo, successChance } from '../src/game/sim.js';
 import { nickKey, nickProblem } from '../src/core/nick.js';
 import { TRAITS, ABILITIES, GACHA_ODDS, fxLines } from '../src/game/traits.js';
-import { HAIR_STYLES } from '../src/game/hair.js';
+import { HAIR_STYLES, HAIR_COLORS, HAIR, drawHair } from '../src/game/hair.js';
 import { WEAPONS, WEAPON, WORKSHOPS, WORKSHOP_WEAPONS, drawWeapon } from '../src/game/weapons.js';
 import { CSTATS, autoAlloc, sumAlloc } from '../src/game/rules.js';
 import { RESEARCH, RESEARCH_BY_KEY } from '../src/game/research.js';
@@ -118,8 +118,8 @@ await t('성공 확률: 같은 부서·높은 스탯이 더 높고 범위 [0.05,
   assert.ok(a > b); for (const u of s.units) for (const m of MISSIONS) { const p = successChance(u, m); assert.ok(p >= 0.05 && p <= 0.97); }
 });
 
-await t('커스터마이징 데이터: 머리 남/여 10개, 무기 13종, 특성 20/20/20, 능력 5, 스탯 6', () => {
-  assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 10); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 10);
+await t('커스터마이징 데이터: 머리 남/여 24개, 무기 13종, 특성 20/20/20, 능력 5, 스탯 6', () => {
+  assert.equal(HAIR_STYLES.filter((h) => h.g === 'm').length, 24); assert.equal(HAIR_STYLES.filter((h) => h.g === 'f').length, 24);
   assert.deepEqual(WEAPONS.map((w) => w.name), ['단검', '쇼트소드', '롱소드', '그레이트소드', '창', '방패', '레이피어', '건틀렛', '망치', '두손 망치', '손도끼', '서리 대검', '배틀엑스']);
   for (const r of ['c', 'r', 'l']) assert.equal(TRAITS.filter((x) => x.rarity === r).length, 20, r);
   assert.ok(TRAITS.filter((x) => x.rarity === 'l' && x.bad).length >= 3, '순수하게 나쁜 전설 특성');
@@ -525,5 +525,21 @@ await t('긴급 습격 정산: 승리=전리품·평판·사기, 패배=약탈·
   const old = JSON.parse(JSON.stringify(snap)); delete old.raid; assert.equal(new Sim(old, () => 0.5).pendingRaid, null, '옛 저장에서도 정상');
   // 다음 날: 카운터 초기화
   const d = new Sim(null, () => 0.5); d.raid.today = 2; d.nextDay(d.buildReport()); assert.equal(d.raid.today, 0);
+});
+await t('헤어스타일: 남 24 + 여 24, 확장 14+14 은 앞·뒤·옆 윤곽이 모두 다르고 범위를 벗어나지 않으며, 머리색 23종', () => {
+  assert.equal(HAIR_STYLES.length, 48); assert.equal(new Set(HAIR_STYLES.map((s) => s.id)).size, 48); assert.equal(new Set(HAIR_STYLES.map((s) => s.name)).size, 48, '이름 고유');
+  const ext = HAIR_STYLES.filter((s) => /^[mf](1[1-9]|2\d)$/.test(s.id)); assert.equal(ext.length, 28); assert.equal(ext.filter((s) => s.g === 'm').length, 14); assert.equal(ext.filter((s) => s.g === 'f').length, 14);
+  const cells = (id, view) => { const c = new Set(); drawHair((col, x, y, w, h) => { assert.ok(/^#[0-9a-f]{6}$/.test(col), id + ' 색 형식'); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) c.add(`${x + i},${y + j}`); }, view, id, '#808080'); return c; };
+  const views = ['down', 'up', 'side'], diff = (a, b) => { let d = 0; for (const v of views) { const A = cells(a, v), B = cells(b, v); for (const c of A) if (!B.has(c)) d++; for (const c of B) if (!A.has(c)) d++; } return d; };
+  const sig = HAIR_STYLES.map((s) => views.map((v) => [...cells(s.id, v)].sort().join(';')).join('|')); assert.equal(new Set(sig).size, 48, '48개 윤곽 모두 다름');
+  for (const s of HAIR_STYLES) for (const v of views) { const m = cells(s.id, v); assert.ok(m.size > 0, s.id); for (const c of m) { const [x, y] = c.split(',').map(Number); assert.ok(x >= 0 && x <= 15 && y >= 0 && y <= 23, `${s.name} ${v} 범위 밖 ${c}`); } }
+  for (const a of ext) for (const b of HAIR_STYLES) { if (a === b || a.g !== b.g) continue; assert.ok(diff(a.id, b.id) >= 12, `${a.name} / ${b.name} 윤곽 차이 ${diff(a.id, b.id)}px`); }
+  // 색: 14 + 9, 모두 올바른 hex 이고 중복 없음, 모든 스타일이 모든 색으로 그려진다
+  assert.equal(HAIR_COLORS.length, 23); assert.ok(HAIR_COLORS.every((c) => /^#[0-9a-f]{6}$/.test(c))); assert.equal(new Set(HAIR_COLORS).size, 23);
+  for (const c of HAIR_COLORS.slice(14)) for (const s of ext.slice(0, 3)) drawHair(() => {}, 'down', s.id, c, '#c0261c');
+  // 끝색 그라데이션도 확장 스타일에서 동작
+  const used = new Set(); drawHair((col) => used.add(col), 'up', 'f11', '#101010', '#c0261c'); assert.ok(used.size > 3, '그라데이션 색이 여러 단계');
+  assert.ok(HAIR.m24.v2 && HAIR.f24.v2);
+  const sx = new Sim(null, () => 0.5); assert.ok(sx.setHair('c04', 'f24', '#2d6a4f').ok && sx.setHair('c05', 'm24', '#F4F4F6').ok); const rx = new Sim(JSON.parse(JSON.stringify(sx.serialize())), () => 0.5); assert.equal(rx.byId.c04.look.hairStyle, 'f24'); assert.equal(rx.byId.c05.look.hairStyle, 'm24'); assert.equal(rx.byId.c05.look.hair, '#f4f4f6', '저장/복원');
 });
 console.log(`\n${n} 테스트 통과${process.exitCode ? ' (실패 있음)' : ''}`);
