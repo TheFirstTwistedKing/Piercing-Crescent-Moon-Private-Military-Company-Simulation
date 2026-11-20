@@ -78,7 +78,7 @@ export function mountCustom(root, ctx, arg) {
     return h('div', {}, h('p', { class: 'f-label' }, '머리 스타일'), seg, grid, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리색 (뿌리)'), sw, h('p', { class: 'f-label', style: 'margin-top:20px' }, '머리 끝색 (그라데이션)'), tipSw);
   };
 
-  const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 32, height: 40, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '48px'; n.style.height = '60px'; return n; };
+  const wIcon = (wid) => { const c = weaponIcon(wid), n = Object.assign(document.createElement('canvas'), { width: 48, height: 40, className: 'px' }); n.getContext('2d').drawImage(c, 0, 0); n.style.width = '72px'; n.style.height = '60px'; return n; };
   const confirmEquip = (w) => {
     const u = U(); if (u.weapon === w.id) return; const left = sim.funds - w.fee, prev = WEAPON[u.weapon];
     modal({ title: `${w.name} 착용`, body: h('div', { class: 'wk-confirm' },

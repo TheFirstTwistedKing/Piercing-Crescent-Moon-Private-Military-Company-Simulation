@@ -1,7 +1,7 @@
 // 캐릭터 스프라이트 — 코드로 그린 16×24 픽셀 캐릭터. 머리 스타일/머리색/무기는 커스터마이징으로 바뀌며 즉시 다시 그려진다.
 import { DEPT } from './data.js';
 import { drawHair, adj } from './hair.js';
-import { drawWeapon, WEAPON } from './weapons.js';
+import { drawWeapon, WEAPON, gunHandX } from './weapons.js';
 import { RES } from './res.js';
 
 export const CW = 32, CH = 24, OX = 8; // 논리 칸 기준: 날개가 펼쳐질 좌우 여백 8칸 씩 (몸은 셀 안 x=8..23)
@@ -107,7 +107,7 @@ function drawInner(c, dir, frame, L0, accent, weapon, wings, rec) {
     }
     hat(r, 'v', back, L, accent, coatL);
     drawWeapon(r, back ? 'up' : 'down', weapon);
-    if (isGun) gunHand(r, back ? 'up' : 'down', L, skinD, al, ar);
+    if (isGun) gunHand(r, back ? 'up' : 'down', L, skinD, weapon);
   } else {
     const right = dir === 'right';
     c.save();
@@ -136,15 +136,15 @@ function drawInner(c, dir, frame, L0, accent, weapon, wings, rec) {
     if (L.extra === 'glasses') { D('#1c1c20', 16, 13, 6, 1); D('rgba(150,200,225,.55)', 17, 14, 3, 2); D('#e8f6ff', 17, 14, 1, 1); }
     hat(r, 's', false, L, accent, coatL);
     drawWeapon(r, 'side', weapon);
-    if (isGun) gunHand(r, 'side', L, skinD, 0, 0);
+    if (isGun) gunHand(r, 'side', L, skinD, weapon);
     c.restore();
   }
 }
 const skin2 = (L) => adj(L.skin, -58);
 
 // 총을 쥔 손: 총기 손잡이 위로 손바닥·엄지·손가락 마디를 반 칸 단위로 덮는다. (손은 방향마다 총 도안의 손 위치와 같은 곳)
-function gunHand(r, view, L, skinD, al, ar) {
-  const [hx, hy] = view === 'down' ? [12, 15] : view === 'up' ? [3, 15] : [10, 15], dir = view === 'up' ? -1 : 1, X = (x, w = 1) => (dir > 0 ? hx + x : hx + 1 - x - w);
+function gunHand(r, view, L, skinD, weapon) {
+  const hy = 15, hx = gunHandX(WEAPON[weapon], view), dir = view === 'up' ? -1 : 1, X = (x, w = 1) => (dir > 0 ? hx + x : hx + 1 - x - w);
   r(L.skin, X(0), hy - 0.5, 1, 1.5); r(skinD, X(0), hy + 0.5, 1, 0.5);                // 손등/손바닥
   r(L.skin, X(1, 0.5), hy, 0.5, 1); r(skinD, X(1, 0.5), hy + 0.5, 0.5, 0.5);            // 방아쇠울 앞 손가락
   r(adj(L.skin, 16), X(0), hy - 0.5, 0.5, 0.5); r(adj(L.skin, 10), X(1, 0.5), hy - 0.5, 0.5, 0.5);   // 엄지 · 반사광
