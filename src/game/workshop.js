@@ -1,7 +1,7 @@
-// 공방 무기 60개: 3개 공방 × 12가지 무기 종류. 종류마다 5개이며 무기마다 모양(도트)이 모두 다르다. (티어 번호 없음)
+// 공방 무기 90개: 3개 공방 × 18가지 무기 종류(근접 12 + 총기 6). 종류마다 5개이며 무기마다 모양(도트)이 모두 다르다. (티어 번호 없음)
 // 착용할 때 착용비(fee)를 한 번 내고, 착용하는 동안 매일 유지비(upkeep)가 운영비에 더해진다.
 // pw 는 화면에 표시되지 않는 내부 강도(1~5): 성능·착용비·유지비를 정하는 데만 쓰인다.
-import { swordPixels, headPixels, gridPixels, toRects, PALETTES } from './weapon-art.js';
+import { swordPixels, headPixels, gridPixels, toRects, gunPixels, PALETTES, GUN_PALETTES } from './weapon-art.js';
 
 export const WORKSHOPS = [
   { id: 'magma', name: '마그마 인더스트리 공방', short: '마그마', color: '#e0702a', desc: '지열로 벼린 중화기 공방. 흑요석처럼 검은 날에 용암 균열이 흐른다. 근력과 파괴력에 특화됐지만 둔해지고, 강한 무기는 열기로 한파를 막아 준다.' },
@@ -14,6 +14,7 @@ const SW = (o) => ({ k: 'sword', o });
 const HD = (top, ox, rows, butt = 'cap') => ({ k: 'head', top, ox, rows: rows.split('/'), butt });
 const SH = (rows) => ({ k: 'shield', rows: rows.split('/') });
 const GN = (rows) => ({ k: 'gauntlet', rows: rows.split('/') });
+const GUN = (o) => ({ k: 'gun', o });
 
 // [종류, 공방, 이름, 내부 강도(1~5), 도트 설계]
 const CATALOG = [
@@ -88,12 +89,49 @@ const CATALOG = [
   ['battleaxe', 'wad', '정예 배틀엑스', 5, HD(-13, 3, '...K.../.BBKBB./BHBWBDB/BBBWBBB/.DBWBD.')],
   ['battleaxe', 'wad', '중장갑 도끼', 2, HD(-13, 0, 'K.KBB../WKBBBB./WHBBBBD/WBBBBBD/WKDDDD./K.DD...')],
   ['battleaxe', 'magma', '마그마 배틀엑스', 4, HD(-13, 3, 'B.BKB.B/BBEWEBB/BEBWBEB/.BDWDB./..DKD..')],
+
+  // ── 총기 30종(종류마다 5개): 옆모습 도트. 마그마=흑요석 + 붉은 발광, 아크=강철 + 청록·보라 방전, 웨폰&아머=건메탈 + 금 장식
+  ['pistol', 'magma', '용암 권총', 2, GUN({ body: 4, bh: 2, bar: 3, bt: 1, mz: 'cone', gp: 2, glow: 'core', top: 'iron', fins: 1 })],
+  ['pistol', 'magma', '흑요석 핸드캐논', 4, GUN({ body: 4, bh: 3, bar: 3, bt: 2, mz: 'brake', gp: 2, glow: 'line', top: 'dot' })],
+  ['pistol', 'arc', '스파크 피스톨', 1, GUN({ body: 3, bh: 2, bar: 3, bt: 1, mz: 'flash', gp: 1, mag: 'box', mp: 2, top: 'rail', glow: 'cells' })],
+  ['pistol', 'arc', '플라즈마 사이드암', 3, GUN({ body: 4, bh: 2, bar: 3, bt: 1, mz: 'flash', gp: 2, top: 'dot', glow: 'line', fins: 1 })],
+  ['pistol', 'wad', '경량 전술 권총', 5, GUN({ body: 3, bh: 2, bar: 2, bt: 1, mz: 'supp', gp: 1, mag: 'long', mp: 1, top: 'iron' })],
+
+  ['smg', 'wad', '개량형 기관단총', 1, GUN({ stock: 'bulk', sl: 2, body: 4, bh: 2, bar: 2, bt: 1, mz: 'flash', gp: 2, mag: 'box', mp: 1, top: 'rail' })],
+  ['smg', 'wad', '카본 SMG-7', 4, GUN({ stock: 'skel', sl: 3, body: 5, bh: 2, bar: 2, bt: 1, mz: 'supp', gp: 2, mag: 'curve', mp: 2, top: 'dot' })],
+  ['smg', 'magma', '슬래그 기관단총', 3, GUN({ stock: 'pad', sl: 1, body: 4, bh: 3, bar: 2, bt: 1, hg: 1, gp: 2, mag: 'drum', mp: 2, glow: 'cells', top: 'iron' })],
+  ['smg', 'magma', '분화 연발총', 5, GUN({ stock: 'fold', sl: 2, body: 5, bh: 3, bar: 3, bt: 2, mz: 'brake', gp: 3, mag: 'long', mp: 2, glow: 'core', top: 'rail' })],
+  ['smg', 'arc', '아크 기관단총', 2, GUN({ stock: 'skel', sl: 2, body: 4, bh: 2, bar: 4, bt: 1, gp: 2, mag: 'curve', mp: 1, glow: 'line', top: 'dot', fins: 1 })],
+
+  ['mg', 'arc', '번개 기관총', 2, GUN({ stock: 'skel', sl: 3, body: 5, bh: 3, bar: 4, bt: 1, hg: 1, gp: 2, mag: 'belt', mp: 2, top: 'rail', glow: 'cells', bipod: 1 })],
+  ['mg', 'arc', '방전 갈링', 5, GUN({ stock: 'full', sl: 2, body: 4, bh: 3, bar: 5, bt: 2, fins: 1, gp: 2, mag: 'drum', mp: 1, glow: 'line', top: 'carry' })],
+  ['mg', 'wad', '중장갑 기관총', 4, GUN({ stock: 'bulk', sl: 3, body: 5, bh: 3, bar: 3, bt: 2, hg: 2, gp: 2, mag: 'belt', mp: 2, top: 'carry', bipod: 1 })],
+  ['mg', 'wad', '전술 지원화기', 1, GUN({ stock: 'full', sl: 3, body: 4, bh: 3, bar: 4, bt: 1, hg: 1, fore: 2, gp: 2, mag: 'long', mp: 2, top: 'scope' })],
+  ['mg', 'magma', '화산 기관총', 3, GUN({ stock: 'pad', sl: 1, body: 6, bh: 3, bar: 3, bt: 2, hg: 2, mz: 'cone', gp: 3, mag: 'belt', mp: 3, glow: 'cells', top: 'iron', fins: 1 })],
+
+  ['sniper', 'magma', '용암 저격총', 2, GUN({ stock: 'full', sl: 3, body: 4, bh: 2, bar: 6, bt: 1, mz: 'cone', gp: 2, mag: 'box', mp: 2, top: 'scope', glow: 'line' })],
+  ['sniper', 'magma', '흑요석 장거리포', 5, GUN({ stock: 'bulk', sl: 3, body: 5, bh: 3, bar: 5, bt: 2, mz: 'brake', gp: 2, top: 'bigscope', bipod: 1, glow: 'core' })],
+  ['sniper', 'arc', '뇌광 저격총', 3, GUN({ stock: 'skel', sl: 4, body: 4, bh: 2, bar: 6, bt: 1, mz: 'flash', gp: 2, mag: 'curve', mp: 2, top: 'bigscope', glow: 'cells' })],
+  ['sniper', 'arc', '플라즈마 레일건', 4, GUN({ stock: 'none', body: 5, bh: 3, bar: 6, bt: 2, gp: 2, glow: 'line', top: 'rail', fins: 1 })],
+  ['sniper', 'wad', '정밀 저격총', 1, GUN({ stock: 'full', sl: 4, body: 3, bh: 2, bar: 7, bt: 1, mz: 'supp', gp: 2, mag: 'long', mp: 1, top: 'scope' })],
+
+  ['rocket', 'wad', '개량형 로켓포', 1, GUN({ tube: { len: 10, th: 3, flare: 'rear', head: 'none', pad: 1, sight: 1, grip: 2 } })],
+  ['rocket', 'wad', '합금 대전차포', 4, GUN({ tube: { len: 12, th: 4, flare: 'both', head: 'rocket', pad: 0, sight: 1, grip: 2 } })],
+  ['rocket', 'magma', '용암 로켓 런처', 3, GUN({ tube: { len: 12, th: 3, flare: 'rear', head: 'rocket', pad: 0, sight: 0, grip: 3 }, glow: 'cells' })],
+  ['rocket', 'magma', '분화 폭렬포', 5, GUN({ tube: { len: 9, th: 4, flare: 'rear', head: 'rocket', pad: 1, sight: 1, grip: 3 }, glow: 'line' })],
+  ['rocket', 'arc', '아크 미사일 런처', 2, GUN({ tube: { len: 10, th: 2, flare: 'both', head: 'rocket', pad: 0, sight: 1, grip: 2 }, glow: 'cells' })],
+
+  ['mortar', 'arc', '코일 박격포', 2, GUN({ tube: { len: 6, th: 3, flare: 'none', head: 'shell', plate: 1, bipod: 1, grip: 0 }, glow: 'cells' })],
+  ['mortar', 'arc', '전격 박격포', 5, GUN({ tube: { len: 8, th: 2, flare: 'rear', head: 'shell', plate: 1, bipod: 0, grip: 0 }, glow: 'line' })],
+  ['mortar', 'wad', '전술 박격포', 1, GUN({ tube: { len: 7, th: 3, flare: 'both', head: 'none', plate: 0, bipod: 1, grip: 2 } })],
+  ['mortar', 'wad', '중장갑 박격포', 4, GUN({ tube: { len: 6, th: 4, flare: 'rear', head: 'shell', plate: 1, bipod: 1, grip: 0 } })],
+  ['mortar', 'magma', '화산 박격포', 3, GUN({ tube: { len: 5, th: 4, flare: 'both', head: 'shell', plate: 1, bipod: 0, grip: 0 }, glow: 'cells' })],
 ];
 
 // ── 성능·비용: 내부 강도(pw)와 공방 성향으로 정한다 ──
 const PRIM = [1, 2, 2, 3, 4];                                     // 공방 주력 능력치 증가량(강도 1~5)
 const FEE = [2500, 5500, 10000, 17000, 28000], UPKEEP = [120, 260, 480, 800, 1250];
-const CLASS_MUL = { dagger: 0.9, shortsword: 0.9, handaxe: 0.9, rapier: 0.9, gauntlet: 0.9, greatsword: 1.25, greathammer: 1.25, battleaxe: 1.25 };
+const CLASS_MUL = { dagger: 0.9, shortsword: 0.9, handaxe: 0.9, rapier: 0.9, gauntlet: 0.9, greatsword: 1.25, greathammer: 1.25, battleaxe: 1.25, pistol: 0.9, smg: 0.9, mg: 1.25, sniper: 1.1, rocket: 1.25, mortar: 1.25 };
 const r2 = (n) => Math.round(n * 100) / 100;
 function workshopFx(wid, pw, base) {
   const fx = { ...base }, add = (o) => { for (const [k, v] of Object.entries(o)) fx[k] = typeof v === 'boolean' ? (fx[k] || v) : r2((fx[k] || 0) + v); };
@@ -113,6 +151,7 @@ function hints(o) {   // 검류 외형 설명(자동)
 function buildArt(a) {
   if (a.k === 'sword') return { kind: 'hand', rects: toRects(swordPixels(a.o)) };
   if (a.k === 'head') return { kind: 'hand', rects: toRects(headPixels(a)) };
+  if (a.k === 'gun') return { kind: 'gun', px: gunPixels(a.o) };
   return { kind: a.k, px: gridPixels(a.rows), w: Math.max(...a.rows.map((r) => r.length)), h: a.rows.length };   // shield | gauntlet
 }
 
@@ -122,6 +161,6 @@ export function buildWorkshopWeapons(types) {
   return CATALOG.map(([ty, wid, name, pw, art]) => {
     const T = TY[ty], wk = WORKSHOP[wid], mul = CLASS_MUL[ty] || 1, n = (count[`${wid}${ty}`] = (count[`${wid}${ty}`] || 0) + 1), tip = art.k === 'sword' ? hints(art.o) : [];
     return { id: `${wid}_${ty}_${n}`, name, desc: [`${T.name} · ${wk.short} 공방`, ...tip].join(' · '), base: ty, workshop: wid, pw,
-      fee: Math.round((FEE[pw - 1] * mul) / 100) * 100, upkeep: Math.round((UPKEEP[pw - 1] * mul) / 10) * 10, fx: workshopFx(wid, pw, T.fx), parts: [], art: buildArt(art), pal: PALETTES[wid] };
+      fee: Math.round((FEE[pw - 1] * mul) / 100) * 100, upkeep: Math.round((UPKEEP[pw - 1] * mul) / 10) * 10, fx: workshopFx(wid, pw, T.fx), parts: [], art: buildArt(art), pal: art.k === 'gun' ? GUN_PALETTES[wid] : PALETTES[wid], ...(T.gun ? { gun: { ...T.gun } } : {}) };
   }).sort((a, b) => types.findIndex((t) => t.id === a.base) - types.findIndex((t) => t.id === b.base) || a.pw - b.pw);
 }
