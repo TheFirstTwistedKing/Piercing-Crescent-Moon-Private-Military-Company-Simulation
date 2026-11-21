@@ -22,6 +22,32 @@ Sim.EVENTS_ON = false; Sim.RAIDS_ON = false;   // 기존 테스트는 무작위 
 
 let n = 0; const t = async (name, fn) => { try { await fn(); n++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name, '\n', e); process.exitCode = 1; } };
 
+// 로컬 백엔드 인증 흐름 (Node 에는 localStorage 가 없어 메모리 대체물을 쓴다)
+globalThis.localStorage ||= (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })();
+const { makeLocal } = await import('../src/core/backend.js');
+await t('로컬 인증: 가입 · 중복 · 로그인 · 비밀번호 변경 · 계정 삭제', async () => {
+  localStorage.removeItem('pcm.local.v1'); const b = makeLocal();
+  const u = await b.signUp({ email: 'A@x.com ', password: 'password1', nick: '알파' });
+  assert.equal(u.email, 'a@x.com'); assert.equal(u.verified, true, '로컬 모드는 이메일 인증된 것으로 취급');
+  await assert.rejects(b.signUp({ email: 'a@x.com', password: 'password1', nick: '브라보' }), { code: 'auth/email-already-in-use' });
+  await assert.rejects(b.signUp({ email: 'b@x.com', password: 'password1', nick: '알파' }), { code: 'nick/taken' });
+  assert.equal(await b.nickAvailable('알파'), false);
+  await b.signOut(); assert.equal(b.current(), null);
+  await assert.rejects(b.signIn({ email: 'a@x.com', password: 'wrong-pass' }), { code: 'auth/invalid-credential' });
+  assert.equal((await b.signIn({ email: 'a@x.com', password: 'password1' })).uid, u.uid);
+  await assert.rejects(b.changePassword({ current: 'nope-nope', next: 'password2' }), { code: 'auth/invalid-credential' });
+  await b.changePassword({ current: 'password1', next: 'password2' }); await b.signOut();
+  await assert.rejects(b.signIn({ email: 'a@x.com', password: 'password1' }), { code: 'auth/invalid-credential' }, '옛 비밀번호는 거부');
+  await b.signIn({ email: 'a@x.com', password: 'password2' });
+  await b.saveGame(u.uid, { day: 3 }); await b.putDevice(u.uid, 'd1', { name: 'pc' });
+  await assert.rejects(b.deleteAccount({ password: 'password1' }), { code: 'auth/invalid-credential' });
+  assert.ok(await b.loadGame(u.uid), '삭제 실패 시 데이터 유지');
+  await b.deleteAccount({ password: 'password2' });
+  assert.equal(b.current(), null); assert.equal(await b.loadGame(u.uid), null); assert.equal((await b.listDevices(u.uid)).length, 0); assert.equal(await b.getProfile(u.uid), null);
+  assert.equal(await b.nickAvailable('알파'), true, '삭제하면 콜사인 해제');
+  await assert.rejects(b.signIn({ email: 'a@x.com', password: 'password2' }), { code: 'auth/invalid-credential' });
+});
+
 await t('PIN/복구코드 해시', async () => {
   const rec = await hashSecret('123456', 1000);
   assert.ok(await verifySecret('123456', rec)); assert.ok(!(await verifySecret('123457', rec)));
