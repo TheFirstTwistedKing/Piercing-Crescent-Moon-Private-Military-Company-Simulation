@@ -9,6 +9,7 @@ import { h, toast, $ } from './core/ui.js';
 import { playIntro } from './screens/intro.js';
 import { mountLogin, mountSignup } from './screens/auth.js';
 import { mountSetup, mountVerify } from './screens/twofa.js';
+import { mountEmailVerify } from './screens/email.js';
 import { mountPanel } from './screens/panel.js';
 import { mountCctv } from './screens/cctv.js';
 import { mountField } from './screens/field.js';
@@ -47,6 +48,14 @@ const ctx = {
   async signedUp(user) { S.user = user; S.profile = await backend.getProfile(user.uid); S.verified = false; S.deviceOk = false; location.hash = '#/setup'; route(); },
   async mfaDone(profile) { S.profile = profile; S.verified = true; await registerCurrentDevice(S.user.uid, { replaceOldest: true }); S.deviceOk = true; location.hash = '#/panel'; route(); },
   async verified(profile, opts = {}) { S.profile = profile; S.verified = true; S.deviceOk = await checkDevice(!!opts.viaRecovery); location.hash = S.deviceOk ? '#/panel' : '#/device'; route(); },
+  async emailVerified(user) { S.user = user; location.hash = S.profile?.mfa?.enabled ? '#/verify' : '#/setup'; route(); },
+  // 계정 삭제: 진행 상황을 저장·정지한 뒤 삭제한다. 실패(비밀번호 오류 등)하면 세션과 엔진을 다시 켠다.
+  async deleteAccount(password) {
+    await resetSession();
+    try { await backend.deleteAccount({ password }); }
+    catch (e) { route(true); throw e; }
+    S.user = S.profile = null; S.verified = S.deviceOk = false; location.hash = '#/login'; route(true);
+  },
   async deviceApproved() { S.deviceOk = true; location.hash = '#/panel'; route(); },
   async logout() { await resetSession(); try { await backend.signOut(); } catch { /* ignore */ } S.user = S.profile = null; S.verified = S.deviceOk = false; location.hash = '#/login'; route(); },
 };
@@ -94,6 +103,7 @@ async function doRoute(force) {
   const cm = hash.match(/^(#\/panel\/(?:custom|leader))\/([\w-]+)$/); if (cm) { hash = cm[1]; arg = cm[2]; }
   let mount;
   if (!S.user) { hash = hash === '#/signup' ? '#/signup' : '#/login'; mount = hash === '#/signup' ? mountSignup : mountLogin; }
+  else if (S.profile?.verifyEmail && !S.user.verified) { hash = '#/email'; mount = mountEmailVerify; } // 이 기능 이후 가입한 계정만
   else if (!S.profile?.mfa?.enabled) { hash = '#/setup'; mount = mountSetup; }
   else if (!S.verified) { hash = '#/verify'; mount = mountVerify; }
   else if (!S.deviceOk) { hash = '#/device'; mount = mountDevice; }

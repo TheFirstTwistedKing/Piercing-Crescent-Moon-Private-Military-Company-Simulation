@@ -24,6 +24,9 @@ const KO_ERR = {
   'auth/network-request-failed': '네트워크 연결을 확인하세요.',
   'auth/operation-not-allowed': 'Firebase 콘솔에서 이메일/비밀번호 로그인이 비활성화되어 있습니다.',
   'auth/user-disabled': '비활성화된 계정입니다.',
+  'auth/requires-recent-login': '보안을 위해 다시 로그인한 뒤 시도하세요.',
+  'auth/missing-password': '비밀번호를 입력하세요.',
+  'auth/too-many-requests-verify': '인증 메일을 너무 자주 요청했습니다. 잠시 후 다시 시도하세요.',
   'nick/taken': '이미 사용 중인 콜사인입니다. 다른 이름을 입력하세요.',
   'permission-denied': '권한이 없습니다. Firestore 보안 규칙을 확인하세요.',
   unavailable: '서버에 연결할 수 없습니다.',
@@ -38,11 +41,17 @@ async function makeFirebase() {
   const app = initializeApp(firebaseConfig);
   const auth = A.getAuth(app);
   const db = F.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
-  const toUser = (u) => (u ? { uid: u.uid, email: u.email, nick: u.displayName || (u.email || '').split('@')[0] } : null);
+  const toUser = (u) => (u ? { uid: u.uid, email: u.email, nick: u.displayName || (u.email || '').split('@')[0], verified: !!u.emailVerified } : null);
   const wrap = async (fn) => { try { return await fn(); } catch (e) { e.userMessage = koError(e); throw e; } };
   const gameRef = (uid) => F.doc(db, 'users', uid, 'data', 'game');
   const sub = (uid, col, id) => F.doc(db, 'users', uid, col, id);
   const nickTaken = () => Object.assign(new Error('nick taken'), { code: 'nick/taken' });
+  // 비밀번호 변경·계정 삭제 전 재인증 (Firebase 는 최근 로그인을 요구한다)
+  const reauth = async (password) => {
+    const u = auth.currentUser; if (!u) throw Object.assign(new Error('no user'), { code: 'auth/requires-recent-login' });
+    await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, password)); return u;
+  };
+  const delCol = async (...path) => { for (const d of (await F.getDocs(F.collection(db, ...path))).docs) await F.deleteDoc(d.ref); };
 
   return {
     mode: 'firebase',
@@ -57,12 +66,28 @@ async function makeFirebase() {
       try { await F.setDoc(F.doc(db, 'nicks', key), { uid: cred.user.uid, nick }); } // 규칙: 이미 있으면 create 불가 → 동시 가입 경쟁도 차단
       catch { await A.deleteUser(cred.user).catch(() => {}); throw nickTaken(); }
       await A.updateProfile(cred.user, { displayName: nick });
-      await F.setDoc(F.doc(db, 'users', cred.user.uid), { nick, nickKey: key, email, createdAt: F.serverTimestamp() }, { merge: true });
+      // verifyEmail: 이 기능 이후 가입한 계정만 이메일 인증을 요구한다 (기존 계정은 플래그가 없어 제외)
+      await F.setDoc(F.doc(db, 'users', cred.user.uid), { nick, nickKey: key, email, verifyEmail: true, createdAt: F.serverTimestamp() }, { merge: true });
+      await A.sendEmailVerification(cred.user).catch(() => {}); // 실패해도 인증 화면에서 다시 보낼 수 있다
       return toUser(auth.currentUser);
     }),
     signIn: ({ email, password }) => wrap(async () => toUser((await A.signInWithEmailAndPassword(auth, email, password)).user)),
     signOut: () => wrap(() => A.signOut(auth)),
     resetPassword: (email) => wrap(() => A.sendPasswordResetEmail(auth, email)),
+    sendVerification: () => wrap(async () => {
+      try { await A.sendEmailVerification(auth.currentUser); }
+      catch (e) { if (e.code === 'auth/too-many-requests') e.code = 'auth/too-many-requests-verify'; throw e; }
+    }),
+    reloadUser: () => wrap(async () => { await auth.currentUser?.reload(); return toUser(auth.currentUser); }),
+    changePassword: ({ current, next }) => wrap(async () => { const u = await reauth(current); await A.updatePassword(u, next); }),
+    deleteAccount: ({ password }) => wrap(async () => {
+      const u = await reauth(password); const uid = u.uid;
+      const prof = (await F.getDoc(F.doc(db, 'users', uid))).data() || {};
+      for (const c of ['devices', 'deviceRequests', 'reports', 'data']) await delCol('users', uid, c);
+      if (prof.nickKey) await F.deleteDoc(F.doc(db, 'nicks', prof.nickKey)).catch(() => {}); // 콜사인 해제
+      await F.deleteDoc(F.doc(db, 'users', uid));
+      await A.deleteUser(u);
+    }),
     getProfile: (uid) => wrap(async () => { const s = await F.getDoc(F.doc(db, 'users', uid)); return s.exists() ? s.data() : null; }),
     updateProfile: (uid, patch) => wrap(() => F.setDoc(F.doc(db, 'users', uid), patch, { merge: true })),
     loadGame: (uid) => wrap(async () => { const s = await F.getDoc(gameRef(uid)); return s.exists() ? JSON.parse(s.data().json) : null; }),
@@ -87,14 +112,14 @@ async function makeFirebase() {
 }
 
 /* ───────────────────────── 로컬 시험 모드 ───────────────────────── */
-function makeLocal() {
+export function makeLocal() {
   const KEY = 'pcm.local.v1';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const save = (d) => localStorage.setItem(KEY, JSON.stringify(d));
   const db = () => { const d = load(); d.users ||= {}; d.profiles ||= {}; d.games ||= {}; d.reports ||= {}; d.nicks ||= {}; d.devices ||= {}; d.requests ||= {}; d.sessions ||= {}; return d; };
   const bucket = (d, kind, uid) => (d[kind][uid] ||= {});
   const fail = (code, msg) => Object.assign(new Error(msg), { code, userMessage: msg });
-  const pub = (u) => (u ? { uid: u.uid, email: u.email, nick: u.nick } : null);
+  const pub = (u) => (u ? { uid: u.uid, email: u.email, nick: u.nick, verified: true } : null); // 로컬 모드는 메일을 보낼 수 없어 인증된 것으로 취급
 
   return {
     mode: 'local',
@@ -119,6 +144,21 @@ function makeLocal() {
     },
     signOut: async () => { const d = db(); delete d.session; save(d); },
     resetPassword: async () => { throw fail('local', '로컬 시험 모드에서는 비밀번호 재설정을 지원하지 않습니다.'); },
+    sendVerification: async () => {},
+    reloadUser: async () => { const d = db(); return pub(d.users[d.session]); },
+    changePassword: async ({ current, next }) => {
+      const d = db(); const u = d.users[d.session];
+      if (!u || !(await verifySecret(current, u.pw))) throw fail('auth/invalid-credential', '현재 비밀번호가 올바르지 않습니다.');
+      u.pw = await hashSecret(next, 60000); save(d);
+    },
+    deleteAccount: async ({ password }) => {
+      const d = db(); const u = d.users[d.session];
+      if (!u || !(await verifySecret(password, u.pw))) throw fail('auth/invalid-credential', '비밀번호가 올바르지 않습니다.');
+      const uid = u.uid, key = d.profiles[uid]?.nickKey;
+      for (const k of ['users', 'profiles', 'games', 'reports', 'devices', 'requests', 'sessions']) delete d[k][uid];
+      if (key && d.nicks[key] === uid) delete d.nicks[key];
+      delete d.session; save(d);
+    },
     getProfile: async (uid) => db().profiles[uid] || null,
     updateProfile: async (uid, patch) => { const d = db(); d.profiles[uid] = deepMerge(d.profiles[uid] || {}, patch); save(d); },
     loadGame: async (uid) => db().games[uid] || null,
